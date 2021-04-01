@@ -147,14 +147,15 @@ void printList(LinkedList* list){
 // global drawn pixels linked lists
 LinkedList* pixel_list;
 LinkedList* front_list;
-LinkedList* back_list;
+//LinkedList* back_list;
 
 // global colour values
 short int bg_color;
 short int tile_color;
 
 // game board
-int game_board[RESOLUTION_X][RESOLUTION_Y];
+bool game_board[RESOLUTION_X][RESOLUTION_Y];
+bool prev_board[RESOLUTION_X][RESOLUTION_Y];
 
 /* GLOBAL VARIABLES END */
 
@@ -237,24 +238,111 @@ int main(void)
 
     // initialize the game board
     initialize_board();
-
+	
+	/*
+	// draw initial board
+    for(int i=0;i < RESOLUTION_X;i++){
+      for(int j=0;j < RESOLUTION_Y;j++){
+        if (game_board[i][j]==ALIVE)
+			draw_pixel(i, j, tile_color);
+      }
+    } 
+	wait_for_vsync(); // swap front and back buffers on VGA vertical sync
+    pixel_buffer_start = *(pixel_ctrl_ptr + 1); // new back buffer
+		*/
+	
+	int total_iterations = 1;
+	
     while (1)
     {
         // start clearing previously drawn pixels
-        front_list->head = back_list->head;
-        back_list->head = pixel_list->head;
-        pixel_list = init();
+		deleteList(front_list);
+        front_list->head = pixel_list->head;//back_list->head;
+        //back_list->head = pixel_list->head;
         clear_screen(front_list);
+        pixel_list = init();
+        front_list = init();
         // finish clearing previously drawn pixels
-
-
-        // update and draw the game board
-        update_board_state();
+		
+        // draw, then update the game board
+        update_board_state(total_iterations);
 
         wait_for_vsync(); // swap front and back buffers on VGA vertical sync
         pixel_buffer_start = *(pixel_ctrl_ptr + 1); // new back buffer
+		
+		total_iterations++;
     }
 
+}
+
+/* draw, then update and compare the next board to the previous board */
+void update_board_state(int iteration){
+	bool new_board[RESOLUTION_X][RESOLUTION_Y];
+    int total = 0,n = RESOLUTION_X,m = RESOLUTION_Y;
+    for(int i=0;i < RESOLUTION_X;i++){
+      for(int j=0;j < RESOLUTION_Y;j++){
+        total = (game_board[(i-1)%n][(j-1)%m]+game_board[(i-1)%n][j]
+        +game_board[(i-1)%n][(j+1)%m]+game_board[i][(j-1)%m]
+        +game_board[i][(j+1)%m]+game_board[(i+1)%n][(j-1)%m]
+        +game_board[(i+1)%n][j]+game_board[(i+1)%n][(j+1)%m])/ALIVE;
+
+        //printf("%d %d:%d\n",i,j,total);
+
+        if(game_board[i][j]==ALIVE){
+            draw_pixel(i,j,tile_color);
+			
+            // cell dies if it has insufficient or too many neighbours
+            if(total < 2 || total > 3){
+                new_board[i][j] = DEAD;
+            }
+			else{
+				new_board[i][j] = ALIVE;
+			}
+        }else{
+            // cell lives if it has 3 neighbours
+            if(total==3){
+                new_board[i][j] = ALIVE;
+            }
+			else{
+				new_board[i][j] = DEAD;
+			}
+        }
+		  
+		if (iteration > 0 && prev_board[i][j]==ALIVE && new_board[i][j]==DEAD)
+			insertFront(pixel_list, i, j);
+		prev_board[i][j] = game_board[i][j];
+      }
+    }
+    for(int i=0;i < RESOLUTION_X;i++){
+      for(int j=0;j < RESOLUTION_Y;j++){
+		 game_board[i][j] = new_board[i][j];
+	  }
+	}
+}
+
+void pulsar(int centre_x, int centre_y){
+	if (!check_bounds(centre_x+6, centre_y+6) || 
+		!check_bounds(centre_x-6, centre_y-6)) return;
+	for (int d = 2; d <=4; d++)
+	{
+		game_board[centre_x+d][centre_y+6] = ALIVE;
+		game_board[centre_x+d][centre_y+1] = ALIVE;
+		game_board[centre_x+d][centre_y-6] = ALIVE;
+		game_board[centre_x+d][centre_y-1] = ALIVE;
+		game_board[centre_x-d][centre_y+6] = ALIVE;
+		game_board[centre_x-d][centre_y+1] = ALIVE;
+		game_board[centre_x-d][centre_y-6] = ALIVE;
+		game_board[centre_x-d][centre_y-1] = ALIVE;
+		
+		game_board[centre_x+6][centre_y+d] = ALIVE;
+		game_board[centre_x+1][centre_y+d] = ALIVE;
+		game_board[centre_x-6][centre_y+d] = ALIVE;
+		game_board[centre_x-1][centre_y+d] = ALIVE;
+		game_board[centre_x+6][centre_y-d] = ALIVE;
+		game_board[centre_x+1][centre_y-d] = ALIVE;
+		game_board[centre_x-6][centre_y-d] = ALIVE;
+		game_board[centre_x-1][centre_y-d] = ALIVE;
+	}
 }
 
 void initialize_board(){
@@ -268,6 +356,7 @@ void initialize_board(){
     game_board[100][102] = ALIVE;
     game_board[100][103] = ALIVE;
     //random_initialization(0.90);
+	pulsar(160, 120);
 }
 
 void random_initialization(float prop){
@@ -282,36 +371,6 @@ void random_initialization(float prop){
   }
 }
 
-void update_board_state(){
-
-    int total = 0,n = RESOLUTION_X,m = RESOLUTION_Y;
-    for(int i=0;i < RESOLUTION_X;i++){
-      for(int j=0;j < RESOLUTION_Y;j++){
-        total = (game_board[(i-1)%n][(j-1)%m]+game_board[(i-1)%n][j]
-        +game_board[(i-1)%n][(j+1)%m]+game_board[i][(j-1)%m]
-        +game_board[i][(j+1)%m]+game_board[(i+1)%n][(j-1)%m]
-        +game_board[(i+1)%n][j]+game_board[(i+1)%n][(j+1)%m])/ALIVE;
-
-        //printf("%d %d:%d\n",i,j,total);
-
-        if(game_board[i][j]==ALIVE){
-            // cell dies if it has insufficient neighbours
-            if(total < 2 || total > 3){
-                game_board[i][j] = DEAD;
-				insertFront(front_list, i, j);
-            }else{
-                draw_pixel(i,j,tile_color);
-            }
-        }else{
-            // cell lives if it has 3 neighbours
-            if(total==3){
-                game_board[i][j] = ALIVE;
-                draw_pixel(i,j,tile_color);
-            }
-        }
-      }
-    }
-}
 
 void draw_pixel(int x, int y, short int line_color)
 {
