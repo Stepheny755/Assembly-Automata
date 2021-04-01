@@ -1,4 +1,3 @@
-
 /* De1-SoC FPGA defines */
 #define SDRAM_BASE            0xC0000000
 #define FPGA_ONCHIP_BASE      0xC8000000
@@ -268,7 +267,7 @@ void initialize_board(){
     game_board[100][101] = ALIVE;
     game_board[100][102] = ALIVE;
     game_board[100][103] = ALIVE;
-    random_initialization(0.01);
+    //random_initialization(0.90);
 }
 
 void random_initialization(float prop){
@@ -299,6 +298,7 @@ void update_board_state(){
             // cell dies if it has insufficient neighbours
             if(total < 2 || total > 3){
                 game_board[i][j] = DEAD;
+				insertFront(front_list, i, j);
             }else{
                 draw_pixel(i,j,tile_color);
             }
@@ -381,7 +381,15 @@ void clear_screen(LinkedList* list){
     deleteFront(list);
   }
 }
-
+/*
+void clear_screen(bool** arr){
+    for(int i = 0;i<RESOLUTION_X;i++){
+      for(int j =0;j<RESOLUTION_Y;j++){
+		  draw_pixel();
+	  }
+	}
+}
+*/
 bool check_bounds(int x,int y){
     return (x<RESOLUTION_X&&x>=0)&&(y<RESOLUTION_Y&&y>=0);
 }
