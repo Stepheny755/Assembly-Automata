@@ -225,7 +225,7 @@ int main(void)
 
     pixel_list = init();
     front_list = init();
-    back_list = init();
+    //back_list = init();
 
     //srand(time(NULL));
 
@@ -345,6 +345,70 @@ void pulsar(int centre_x, int centre_y){
 	}
 }
 
+void draw_ECE243(int left_x, int top_y){
+	//E
+	for (int d = 0; d <=4; d++){
+		game_board[left_x][top_y+d] = ALIVE;
+		game_board[left_x+1][top_y+d] = ALIVE;
+	}
+	for (int d = 2; d<=4; d++){
+		game_board[left_x+d][top_y] = ALIVE;
+		game_board[left_x+d][top_y+2] = ALIVE;
+		game_board[left_x+d][top_y+4] = ALIVE;
+	}
+	//C
+	for (int d = 0; d <=4; d++){
+		game_board[left_x+7][top_y+d] = ALIVE;
+		game_board[left_x+8][top_y+d] = ALIVE;
+	}
+	for (int d = 2; d<=4; d++){
+		game_board[left_x+7+d][top_y] = ALIVE;
+		game_board[left_x+7+d][top_y+4] = ALIVE;
+	}
+	//E
+	for (int d = 0; d <=4; d++){
+		game_board[left_x+14][top_y+d] = ALIVE;
+		game_board[left_x+15][top_y+d] = ALIVE;
+	}
+	for (int d = 2; d<=4; d++){
+		game_board[left_x+d+14][top_y] = ALIVE;
+		game_board[left_x+d+14][top_y+2] = ALIVE;
+		game_board[left_x+d+14][top_y+4] = ALIVE;
+	}
+	//2
+	for (int d = 0; d <=2; d++){
+		game_board[left_x+24][top_y+d] = ALIVE;
+		game_board[left_x+25][top_y+d] = ALIVE;
+		game_board[left_x+21][top_y+d+2] = ALIVE;
+		game_board[left_x+22][top_y+d+2] = ALIVE;
+	}
+	for (int d = 2; d<=4; d++){
+		game_board[left_x+d+21][top_y] = ALIVE;
+		game_board[left_x+d+21][top_y+2] = ALIVE;
+		game_board[left_x+d+21][top_y+4] = ALIVE;
+	}
+	//4
+	for (int d = 0; d <=2; d++){
+		game_board[left_x+28][top_y+d] = ALIVE;
+		game_board[left_x+29][top_y+d] = ALIVE;
+		game_board[left_x+28+d][top_y+2] = ALIVE;
+	}
+	for (int d = 0; d <=4; d++){
+		game_board[left_x+31][top_y+d] = ALIVE;
+		game_board[left_x+32][top_y+d] = ALIVE;
+	}
+	//3
+	for (int d = 0; d <=4; d++){
+		game_board[left_x+37][top_y+d] = ALIVE;
+		game_board[left_x+38][top_y+d] = ALIVE;
+	}
+	for (int d = 2; d<=4; d++){
+		game_board[left_x+d+33][top_y] = ALIVE;
+		game_board[left_x+d+33][top_y+2] = ALIVE;
+		game_board[left_x+d+33][top_y+4] = ALIVE;
+	}
+}
+
 void initialize_board(){
     for(int i=0;i < RESOLUTION_X;i++){
       for(int j=0;j < RESOLUTION_Y;j++){
@@ -357,6 +421,7 @@ void initialize_board(){
     game_board[100][103] = ALIVE;
     //random_initialization(0.90);
 	pulsar(160, 120);
+	draw_ECE243(100, 10);
 }
 
 void random_initialization(float prop){
