@@ -26,10 +26,12 @@
 #define ORANGE 0xFC00
 #define BLACK 0x0
 
-/* Screen size. */
+/* Screen and character buffer resolution */
 #define RESOLUTION_X 320
 #define RESOLUTION_Y 240
-
+#define CHAR_MAX_X 80
+#define CHAR_MAX_Y 60
+	
 /* Tile Active */
 #define DEAD  0
 #define ALIVE 1
@@ -185,11 +187,17 @@ void draw_line(int ax,int ay,int bx,int by,short int line_color);
 // draw a square with given width/height at the coordinates
 void draw_rect(int x,int y,int width, int height,short int color);
 
+// draw a string of text on character buffer
+void draw_text(int x, int y, char * text_ptr);
+
 // wait for vertical synchronization
 void wait_for_vsync();
 
 // clear the screen on startup (slow clear)
 void initial_clear();
+
+// clears the character buffer
+void initial_clear_chars();
 
 // clear the screen between frames (fast clear);
 void clear_screen(LinkedList* list);
@@ -197,62 +205,54 @@ void clear_screen(LinkedList* list);
 // check if coordinates is on game board
 bool check_bounds(int x,int y);
 
+// shapes and creatures:
+void pulsar(int centre_x, int centre_y);
+void draw_ECE243(int left_x, int top_y);
+
 /* HELPER FUNCTIONS END */
 
 
 int main(void)
 {
     // set background color for clearing screen
-    bg_color = WHITE;
-
+    bg_color = BLACK;
     // set tile color for pixels
-    tile_color = BLACK;
+    tile_color = WHITE;
 
+	initial_clear_chars();
+    //srand(time(NULL));
+    pixel_list = init();
+    front_list = init();
+	
+	// Set up and clear both front and back buffers
     volatile int * pixel_ctrl_ptr = (int *)0xFF203020;
-    // declare other variables(not shown)
-    // initialize location and direction of rectangles(not shown)
-
     /* set front pixel buffer to start of FPGA On-chip memory */
     *(pixel_ctrl_ptr + 1) = 0xC8000000; // first store the address in the
                                         // back buffer
     /* now, swap the front/back buffers, to set the front buffer location */
-
     wait_for_vsync();
     /* initialize a pointer to the pixel buffer, used by drawing functions */
     pixel_buffer_start = *pixel_ctrl_ptr;
-
     initial_clear();
-
-    pixel_list = init();
-    front_list = init();
-    //back_list = init();
-
-    //srand(time(NULL));
 
      // pixel_buffer_start points to the pixel buffer
     /* set back pixel buffer to start of SDRAM memory */
     *(pixel_ctrl_ptr + 1) = 0xC0000000;
     pixel_buffer_start = *(pixel_ctrl_ptr + 1); // we draw on the back buffer
-
     initial_clear();
 
+	// draw on character buffer
+	char* str = "hello\0";
+	draw_text(35,20,str);
+	char* credits = "Stephen and Yvonne, 2021\0";
+	draw_text(55,58,credits);
+	
     // initialize the game board
     initialize_board();
 	
-	/*
-	// draw initial board
-    for(int i=0;i < RESOLUTION_X;i++){
-      for(int j=0;j < RESOLUTION_Y;j++){
-        if (game_board[i][j]==ALIVE)
-			draw_pixel(i, j, tile_color);
-      }
-    } 
-	wait_for_vsync(); // swap front and back buffers on VGA vertical sync
-    pixel_buffer_start = *(pixel_ctrl_ptr + 1); // new back buffer
-		*/
-	
+
+	// simulation loop
 	int total_iterations = 1;
-	
     while (1)
     {
         // start clearing previously drawn pixels
@@ -474,6 +474,20 @@ void draw_rect(int x,int y,int width, int height,short int color){
     }
 }
 
+void draw_text(int x, int y, char * text_ptr) {
+	int offset;
+	volatile char * character_buffer =
+	(char *)0xC9000000; // video character buffer
+	/* assume that the text string fits on one line */
+	offset = (y << 7) + x;
+	while (*(text_ptr)) {
+		*(character_buffer + offset) =
+		*(text_ptr); // write to the character buffer
+		++text_ptr;
+		++offset;
+	}
+}
+
 void wait_for_vsync(){
     volatile int* pixel_ctrl_ptr = (int*)0xFF203020;
     register int status;
@@ -495,6 +509,17 @@ void initial_clear(){
     }
 }
 
+// clears character buffer
+void initial_clear_chars(){
+	volatile char* char_ptr = (char*)0xC9000000;
+	for (int j = 0; j<CHAR_MAX_Y;j++){
+		for (int i = 0; i<CHAR_MAX_X; i++){
+			int offset = (j<<7) + i;
+			*(char_ptr+offset) = ' ';
+		}
+	}
+}
+
 void clear_screen(LinkedList* list){
   if(isEmpty(list)){
     return;
@@ -505,15 +530,7 @@ void clear_screen(LinkedList* list){
     deleteFront(list);
   }
 }
-/*
-void clear_screen(bool** arr){
-    for(int i = 0;i<RESOLUTION_X;i++){
-      for(int j =0;j<RESOLUTION_Y;j++){
-		  draw_pixel();
-	  }
-	}
-}
-*/
+
 bool check_bounds(int x,int y){
     return (x<RESOLUTION_X&&x>=0)&&(y<RESOLUTION_Y&&y>=0);
 }
