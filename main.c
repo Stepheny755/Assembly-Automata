@@ -106,6 +106,7 @@
 #include <stdbool.h>
 #include <time.h>
 #include <float.h>
+#include <string.h>
 
 volatile int pixel_buffer_start; // global variable
 
@@ -208,6 +209,8 @@ void printList(LinkedList* list){
 
 /* GLOBAL VARIABLES */
 
+volatile int * pixel_ctrl_ptr = (int *)0xFF203020;
+
 // global drawn pixels linked lists
 LinkedList* pixel_list;
 LinkedList* front_list;
@@ -228,6 +231,10 @@ bool isPaused;
 
 
 /* GAME FUNCTIONS */
+
+// program screens
+void main_menu();
+void presets();
 
 // set the starting board state
 void initialize_board();
@@ -300,7 +307,7 @@ int main(void)
     /* Initialize variables */
     bg_color = BLACK;
     tile_color = WHITE;
-    isPaused = false;
+    isPaused = true;
 
     pixel_list = init();
     front_list = init();
@@ -315,7 +322,6 @@ int main(void)
 	initial_clear_chars();
 	
 	/* Set up and clear both front and back buffers */
-    volatile int * pixel_ctrl_ptr = (int *)0xFF203020;
     // set front pixel buffer to start of FPGA On-chip memory
     *(pixel_ctrl_ptr + 1) = 0xC8000000; // first store the address in the
                                         // back buffer
@@ -330,28 +336,61 @@ int main(void)
     *(pixel_ctrl_ptr + 1) = 0xC0000000;
     pixel_buffer_start = *(pixel_ctrl_ptr + 1); // we draw on the back buffer
     initial_clear();
+	
+	main_menu();
+}
 
-	// draw on character buffer
-	char* str = "hello\0";
-	draw_text(35,20,str);
+void main_menu(){
+	// get input and a bunch of logic here
+	presets();
+}
+
+void presets(){
+	// Title and instructions
+	char* str = "Game of Life Presets\0";
+	draw_text((80-strlen(str))/2, 1,str);
+	str = "Welcome to the gallery of Life creatures.\0";
+	draw_text(4, 4, str);
+	str = "Press pushbutton 0 to start simulation.\0";
+	draw_text(4, 6, str);
+	str = "Back to Main Menu<<"; // clicky stuff?
+	draw_text(2, 57, str);
 	char* credits = "Stephen and Yvonne, 2021\0";
 	draw_text(55,58,credits);
-	
-    // initialize and draw the game board on both buffers
-	// optimizations possible here!!!
-    initialize_board();
-	draw_board(0,RESOLUTION_X,0,RESOLUTION_Y);
-    wait_for_vsync(); // swap front and back buffers on VGA vertical sync
-    pixel_buffer_start = *(pixel_ctrl_ptr + 1); // new back buffer
-	draw_board(0,RESOLUTION_X,0,RESOLUTION_Y);
-    wait_for_vsync(); // swap front and back buffers on VGA vertical sync
-    pixel_buffer_start = *(pixel_ctrl_ptr + 1); // new back buffer
 
+    // 1. Still Life
+	str = "1. Still Life";
+	draw_text(4, 9, str);
+	
+	// 2. Oscillators
+	str = "2. Oscillators";
+	draw_text(4, 20, str);
+	pulsar(160, 100);
+	
+	// 3. Space ships
+	str = "3. Space ships";
+	draw_text(4, 30, str);
+	
+	// 4. Logic gates
+	str = "4. Logic gates and other cool stuff";
+	draw_text(4, 50, str);
+	draw_ECE243(200, 200);
+	
+	/* // scratch this, this is kinda stupid
+	draw_board(0,RESOLUTION_X,0,RESOLUTION_Y);
+    wait_for_vsync(); // swap front and back buffers on VGA vertical sync
+    pixel_buffer_start = *(pixel_ctrl_ptr + 1); // new back buffer
+	draw_board(0,RESOLUTION_X,0,RESOLUTION_Y);
+    wait_for_vsync(); // swap front and back buffers on VGA vertical sync
+    pixel_buffer_start = *(pixel_ctrl_ptr + 1); // new back buffer
+	*/
+	
 	// simulation loop
-	int total_iterations = 1;
+	int total_iterations = 0;
     while (1)
     {
-		  if (isPaused) continue;
+		if (total_iterations > 0 && isPaused) // display the initial config
+			continue;
 		
         // start clearing previously drawn pixels
 		deleteList(front_list);
@@ -363,7 +402,7 @@ int main(void)
         // finish clearing previously drawn pixels
 		
         // draw, then update the game board
-        update_board_state(0,RESOLUTION_X,100,RESOLUTION_Y);
+        update_board_state(0,RESOLUTION_X,0,RESOLUTION_Y);
 
         wait_for_vsync(); // swap front and back buffers on VGA vertical sync
         pixel_buffer_start = *(pixel_ctrl_ptr + 1); // new back buffer
@@ -417,6 +456,21 @@ void update_board_state(int x0, int x1, int y0, int y1){
 	  }
 	}
 }
+
+void initialize_board(){
+    for(int i=0;i < RESOLUTION_X;i++){
+      for(int j=0;j < RESOLUTION_Y;j++){
+        game_board[i][j] = DEAD;
+		prev_board[i][j] = DEAD;
+      }
+    }
+    game_board[100][100] = ALIVE;
+    game_board[100][101] = ALIVE;
+    game_board[100][102] = ALIVE;
+    game_board[100][103] = ALIVE;
+    //random_initialization(0.90);
+}
+
 
 // 12x12
 void pulsar(int centre_x, int centre_y){
@@ -509,21 +563,6 @@ void draw_ECE243(int left_x, int top_y){
 	}
 }
 
-void initialize_board(){
-    for(int i=0;i < RESOLUTION_X;i++){
-      for(int j=0;j < RESOLUTION_Y;j++){
-        game_board[i][j] = DEAD;
-		prev_board[i][j] = DEAD;
-      }
-    }
-    game_board[100][100] = ALIVE;
-    game_board[100][101] = ALIVE;
-    game_board[100][102] = ALIVE;
-    game_board[100][103] = ALIVE;
-    //random_initialization(0.90);
-	pulsar(160, 120);
-	draw_ECE243(100, 10);
-}
 
 void draw_board(int x0, int x1, int y0, int y1){
 	for(int i=x0;i<x1;i++){
