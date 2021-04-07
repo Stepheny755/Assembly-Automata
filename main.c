@@ -1,7 +1,17 @@
-/* De1-SoC FPGA defines */
+/* FPGA address macros */
+#define BOARD                 "DE1-SoC"
+
+/* Memory */
+#define DDR_BASE              0x00000000
+#define DDR_END               0x3FFFFFFF
+#define A9_ONCHIP_BASE        0xFFFF0000
+#define A9_ONCHIP_END         0xFFFFFFFF
 #define SDRAM_BASE            0xC0000000
+#define SDRAM_END             0xC3FFFFFF
 #define FPGA_ONCHIP_BASE      0xC8000000
+#define FPGA_ONCHIP_END       0xC803FFFF
 #define FPGA_CHAR_BASE        0xC9000000
+#define FPGA_CHAR_END         0xC9001FFF
 
 /* Cyclone V FPGA devices */
 #define LEDR_BASE             0xFF200000
@@ -9,10 +19,62 @@
 #define HEX5_HEX4_BASE        0xFF200030
 #define SW_BASE               0xFF200040
 #define KEY_BASE              0xFF200050
+#define JP1_BASE              0xFF200060
+#define JP2_BASE              0xFF200070
+#define PS2_BASE              0xFF200100
+#define PS2_DUAL_BASE         0xFF200108
+#define JTAG_UART_BASE        0xFF201000
+#define JTAG_UART_2_BASE      0xFF201008
+#define IrDA_BASE             0xFF201020
 #define TIMER_BASE            0xFF202000
+#define AV_CONFIG_BASE        0xFF203000
 #define PIXEL_BUF_CTRL_BASE   0xFF203020
 #define CHAR_BUF_CTRL_BASE    0xFF203030
+#define AUDIO_BASE            0xFF203040
+#define VIDEO_IN_BASE         0xFF203060
+#define ADC_BASE              0xFF204000
 
+/* Cyclone V HPS devices */
+#define HPS_GPIO1_BASE        0xFF709000
+#define HPS_TIMER0_BASE       0xFFC08000
+#define HPS_TIMER1_BASE       0xFFC09000
+#define HPS_TIMER2_BASE       0xFFD00000
+#define HPS_TIMER3_BASE       0xFFD01000
+#define FPGA_BRIDGE           0xFFD0501C
+
+/* ARM A9 MPCORE devices */
+#define   PERIPH_BASE         0xFFFEC000    // base address of peripheral devices
+#define   MPCORE_PRIV_TIMER   0xFFFEC600    // PERIPH_BASE + 0x0600
+
+/* Interrupt controller (GIC) CPU interface(s) */
+#define MPCORE_GIC_CPUIF      0xFFFEC100    // PERIPH_BASE + 0x100
+#define ICCICR                0x00          // offset to CPU interface control reg
+#define ICCPMR                0x04          // offset to interrupt priority mask reg
+#define ICCIAR                0x0C          // offset to interrupt acknowledge reg
+#define ICCEOIR               0x10          // offset to end of interrupt reg
+/* Interrupt controller (GIC) distributor interface(s) */
+#define MPCORE_GIC_DIST       0xFFFED000    // PERIPH_BASE + 0x1000
+#define ICDDCR                0x00          // offset to distributor control reg
+#define ICDISER               0x100         // offset to interrupt set-enable regs
+#define ICDICER               0x180         // offset to interrupt clear-enable regs
+#define ICDIPTR               0x800         // offset to interrupt processor targets regs
+#define ICDICFR               0xC00         // offset to interrupt configuration regs
+
+/* processor mode constants */
+#define		USER_MODE				0b10000
+#define		FIQ_MODE				0b10001
+#define		IRQ_MODE				0b10010
+#define		SVC_MODE				0b10011
+#define		ABORT_MODE				0b10111
+#define		UNDEF_MODE				0b11011
+#define		SYS_MODE				0b11111
+
+#define 	KEYS_IRQ				73
+
+#define		INT_ENABLE				0b01000000
+#define		INT_DISABLE				0b11000000
+#define		ENABLE					0x1
+	
 /* default VGA colors */
 #define WHITE 0xFFFF
 #define YELLOW 0xFFE0
@@ -151,13 +213,16 @@ LinkedList* pixel_list;
 LinkedList* front_list;
 //LinkedList* back_list;
 
+// game board
+bool game_board[RESOLUTION_X][RESOLUTION_Y];
+bool prev_board[RESOLUTION_X][RESOLUTION_Y];
+
 // global colour values
 short int bg_color;
 short int tile_color;
 
-// game board
-bool game_board[RESOLUTION_X][RESOLUTION_Y];
-bool prev_board[RESOLUTION_X][RESOLUTION_Y];
+// game states
+bool isPaused;
 
 /* GLOBAL VARIABLES END */
 
@@ -173,10 +238,28 @@ void random_initialization(float prop);
 // update and draw the board
 void update_board_state();
 
+// shapes and creatures:
+void pulsar(int centre_x, int centre_y);
+void draw_ECE243(int left_x, int top_y);
+
 /* GAME FUNCTIONS END */
 
 
 /* HELPER FUNCTIONS */
+// set up IRQ stack pointer
+void set_up_IRQ();
+
+// configure GIC
+void config_GIC();
+
+// configure keys
+void config_KEYs();
+
+// interrupt service routine for KEYs
+void KEY_ISR();
+	
+// enable interrupts after setting up devices
+void enable_interrupts();
 
 // plot a pixel with given colour at coordinates
 void draw_pixel(int x, int y, short int line_color);
@@ -205,38 +288,42 @@ void clear_screen(LinkedList* list);
 // check if coordinates is on game board
 bool check_bounds(int x,int y);
 
-// shapes and creatures:
-void pulsar(int centre_x, int centre_y);
-void draw_ECE243(int left_x, int top_y);
 
 /* HELPER FUNCTIONS END */
 
 
 int main(void)
 {
-    // set background color for clearing screen
+    /* Initialize variables */
     bg_color = BLACK;
-    // set tile color for pixels
     tile_color = WHITE;
+    isPaused = false;
 
-	initial_clear_chars();
-    //srand(time(NULL));
     pixel_list = init();
     front_list = init();
 	
-	// Set up and clear both front and back buffers
+	//srand(time(NULL));
+    
+	set_up_IRQ();
+	config_GIC();
+	config_KEYs();
+	enable_interrupts();
+	
+	initial_clear_chars();
+	
+	/* Set up and clear both front and back buffers */
     volatile int * pixel_ctrl_ptr = (int *)0xFF203020;
-    /* set front pixel buffer to start of FPGA On-chip memory */
+    // set front pixel buffer to start of FPGA On-chip memory
     *(pixel_ctrl_ptr + 1) = 0xC8000000; // first store the address in the
                                         // back buffer
-    /* now, swap the front/back buffers, to set the front buffer location */
+    // now, swap the front/back buffers, to set the front buffer location
     wait_for_vsync();
-    /* initialize a pointer to the pixel buffer, used by drawing functions */
+    // initialize a pointer to the pixel buffer, used by drawing functions
     pixel_buffer_start = *pixel_ctrl_ptr;
     initial_clear();
 
      // pixel_buffer_start points to the pixel buffer
-    /* set back pixel buffer to start of SDRAM memory */
+    // set back pixel buffer to start of SDRAM memory 
     *(pixel_ctrl_ptr + 1) = 0xC0000000;
     pixel_buffer_start = *(pixel_ctrl_ptr + 1); // we draw on the back buffer
     initial_clear();
@@ -255,6 +342,8 @@ int main(void)
 	int total_iterations = 1;
     while (1)
     {
+		  if (isPaused) continue;
+		
         // start clearing previously drawn pixels
 		deleteList(front_list);
         front_list->head = pixel_list->head;//back_list->head;
@@ -533,4 +622,119 @@ void clear_screen(LinkedList* list){
 
 bool check_bounds(int x,int y){
     return (x<RESOLUTION_X&&x>=0)&&(y<RESOLUTION_Y&&y>=0);
+}
+
+// set up IRQ stack pointer
+void set_up_IRQ(){
+	int stack, mode;
+	stack = A9_ONCHIP_END - 7; // top of A9 onchip memory, aligned to 8 bytes
+	/* change processor to IRQ mode with interrupts disabled */
+	mode = INT_DISABLE | IRQ_MODE;
+	asm("msr cpsr, %[ps]" : : [ps] "r"(mode));
+	/* set banked stack pointer */
+	asm("mov sp, %[ps]" : : [ps] "r"(stack));
+	/* go back to SVC mode before executing subroutine return! */
+	mode = INT_DISABLE | SVC_MODE;
+	asm("msr cpsr, %[ps]" : : [ps] "r"(mode));
+
+}
+
+// enable interrupts after configuring devices
+void enable_interrupts()
+{
+	int status = SVC_MODE | INT_ENABLE;
+	asm("msr cpsr, %[ps]" : : [ps] "r"(status));
+}
+
+// configure keys
+void config_KEYs(){
+	volatile int * KEY_ptr = (int *)KEY_BASE; // pushbutton KEY address
+	*(KEY_ptr + 2) = 0x3; // enable interrupts for KEY[1]
+}
+
+// interrupt service routine for KEYs
+void KEY_ISR()
+{
+	volatile int * KEY_ptr = (int *)KEY_BASE;
+	int press;
+	press = *(KEY_ptr + 3); // read the pushbutton interrupt register
+	*(KEY_ptr + 3) = press; // Clear the interrupt
+	isPaused ^= 1; // Toggle isPaused value
+	return;
+}
+
+// configure the GIC
+void config_GIC(void)
+{
+	int address; // used to calculate register addresses
+	/* configure the HPS timer interrupt
+	*((int *)0xFFFED8C4) = 0x01000000;
+	*((int *)0xFFFED118) = 0x00000080;*/
+	/* configure the FPGA interval timer and KEYs interrupts */
+	*((int *)0xFFFED848) = 0x00000101;
+	*((int *)0xFFFED108) = 0x00000300;
+	// Set Interrupt Priority Mask Register (ICCPMR). Enable interrupts of all
+	// priorities
+	address = MPCORE_GIC_CPUIF + ICCPMR;
+	*((int *)address) = 0xFFFF;
+	// Set CPU Interface Control Register (ICCICR). Enable signaling of
+	// interrupts
+	address = MPCORE_GIC_CPUIF + ICCICR;
+	*((int *)address) = ENABLE;
+	// Configure the Distributor Control Register (ICDDCR) to send pending
+	// interrupts to CPUs
+	address = MPCORE_GIC_DIST + ICDDCR;
+	*((int *)address) = ENABLE;
+}
+
+// Define the IRQ exception handler
+void __attribute__((interrupt)) __cs3_isr_irq(void)
+{
+	// Read the ICCIAR from the processor interface
+	int address = MPCORE_GIC_CPUIF + ICCIAR;
+	int int_ID = *((int *)address);
+	switch (int_ID){ 
+		case KEYS_IRQ: // check if interrupt is from the KEYs
+			KEY_ISR();
+			break;
+		default:
+			while (1)
+			; // if unexpected, then stay here
+	}
+	// Write to the End of Interrupt Register (ICCEOIR)
+	address = MPCORE_GIC_CPUIF + ICCEOIR;
+	*((int *)address) = int_ID;
+	return;
+}
+
+// Define the remaining exception handlers (equivalent to the exceptions vector table)
+void __attribute__((interrupt)) __cs3_reset(void)
+{
+while (1)
+;
+}
+void __attribute__((interrupt)) __cs3_isr_undef(void)
+{
+while (1)
+;
+}
+void __attribute__((interrupt)) __cs3_isr_swi(void)
+{
+while (1)
+;
+}
+void __attribute__((interrupt)) __cs3_isr_pabort(void)
+{
+while (1)
+;
+}
+void __attribute__((interrupt)) __cs3_isr_dabort(void)
+{
+while (1)
+;
+}
+void __attribute__((interrupt)) __cs3_isr_fiq(void)
+{
+while (1)
+;
 }
