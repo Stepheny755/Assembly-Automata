@@ -232,11 +232,14 @@ bool isPaused;
 // set the starting board state
 void initialize_board();
 
+// draw the game board (a rectangle in the screen)
+void draw_board(int x0, int x1, int y0, int y1);
+	
 // initialize the board randomly with prop % chance that a cell is alive at the start
 void random_initialization(float prop);
 
-// update and draw the board
-void update_board_state();
+// update and draw the board (a rectangle in the screen)
+void update_board_state(int x0, int x1, int y0, int y1);
 
 // shapes and creatures:
 void pulsar(int centre_x, int centre_y);
@@ -334,9 +337,15 @@ int main(void)
 	char* credits = "Stephen and Yvonne, 2021\0";
 	draw_text(55,58,credits);
 	
-    // initialize the game board
+    // initialize and draw the game board on both buffers
+	// optimizations possible here!!!
     initialize_board();
-	
+	draw_board(0,RESOLUTION_X,0,RESOLUTION_Y);
+    wait_for_vsync(); // swap front and back buffers on VGA vertical sync
+    pixel_buffer_start = *(pixel_ctrl_ptr + 1); // new back buffer
+	draw_board(0,RESOLUTION_X,0,RESOLUTION_Y);
+    wait_for_vsync(); // swap front and back buffers on VGA vertical sync
+    pixel_buffer_start = *(pixel_ctrl_ptr + 1); // new back buffer
 
 	// simulation loop
 	int total_iterations = 1;
@@ -354,7 +363,7 @@ int main(void)
         // finish clearing previously drawn pixels
 		
         // draw, then update the game board
-        update_board_state(total_iterations);
+        update_board_state(0,RESOLUTION_X,100,RESOLUTION_Y);
 
         wait_for_vsync(); // swap front and back buffers on VGA vertical sync
         pixel_buffer_start = *(pixel_ctrl_ptr + 1); // new back buffer
@@ -365,11 +374,11 @@ int main(void)
 }
 
 /* draw, then update and compare the next board to the previous board */
-void update_board_state(int iteration){
+void update_board_state(int x0, int x1, int y0, int y1){
 	bool new_board[RESOLUTION_X][RESOLUTION_Y];
     int total = 0,n = RESOLUTION_X,m = RESOLUTION_Y;
-    for(int i=0;i < RESOLUTION_X;i++){
-      for(int j=0;j < RESOLUTION_Y;j++){
+    for(int i=x0;i < x1;i++){
+      for(int j=y0;j < y1;j++){
         total = (game_board[(i-1)%n][(j-1)%m]+game_board[(i-1)%n][j]
         +game_board[(i-1)%n][(j+1)%m]+game_board[i][(j-1)%m]
         +game_board[i][(j+1)%m]+game_board[(i+1)%n][(j-1)%m]
@@ -397,7 +406,7 @@ void update_board_state(int iteration){
 			}
         }
 		  
-		if (iteration > 0 && prev_board[i][j]==ALIVE && new_board[i][j]==DEAD)
+		if (prev_board[i][j]==ALIVE && new_board[i][j]==DEAD)
 			insertFront(pixel_list, i, j);
 		prev_board[i][j] = game_board[i][j];
       }
@@ -409,6 +418,7 @@ void update_board_state(int iteration){
 	}
 }
 
+// 12x12
 void pulsar(int centre_x, int centre_y){
 	if (!check_bounds(centre_x+6, centre_y+6) || 
 		!check_bounds(centre_x-6, centre_y-6)) return;
@@ -434,6 +444,7 @@ void pulsar(int centre_x, int centre_y){
 	}
 }
 
+// 37x5
 void draw_ECE243(int left_x, int top_y){
 	//E
 	for (int d = 0; d <=4; d++){
@@ -502,6 +513,7 @@ void initialize_board(){
     for(int i=0;i < RESOLUTION_X;i++){
       for(int j=0;j < RESOLUTION_Y;j++){
         game_board[i][j] = DEAD;
+		prev_board[i][j] = DEAD;
       }
     }
     game_board[100][100] = ALIVE;
@@ -511,6 +523,15 @@ void initialize_board(){
     //random_initialization(0.90);
 	pulsar(160, 120);
 	draw_ECE243(100, 10);
+}
+
+void draw_board(int x0, int x1, int y0, int y1){
+	for(int i=x0;i<x1;i++){
+		for(int j=y0;j<y1;j++){
+			if (game_board[i][j]==ALIVE)
+				draw_pixel(i,j,tile_color);
+		}
+	}
 }
 
 void random_initialization(float prop){
