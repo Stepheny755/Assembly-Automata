@@ -240,15 +240,19 @@ void presets();
 void initialize_board();
 
 // draw the game board (a rectangle in the screen)
-void draw_board(int x0, int x1, int y0, int y1);
+void draw_board(int x0, int x1, int y0, int y1, int size);
 	
 // initialize the board randomly with prop % chance that a cell is alive at the start
 void random_initialization(float prop);
 
 // update and draw the board (a rectangle in the screen)
-void update_board_state(int x0, int x1, int y0, int y1);
+void update_board_state(int x0, int x1, int y0, int y1, int size);
 
 // shapes and creatures:
+void ship(int centre_x, int centre_y);
+void block(int left_x, int top_y);
+void tub(int centre_x, int centre_y);
+void glider(int left_x, int top_y);
 void pulsar(int centre_x, int centre_y);
 void draw_ECE243(int left_x, int top_y);
 
@@ -274,6 +278,8 @@ void enable_interrupts();
 // plot a pixel with given colour at coordinates
 void draw_pixel(int x, int y, short int line_color);
 
+void draw_tile(int x, int y, int size, short int line_color);
+
 // draw a line with given colour between coordinates
 void draw_line(int ax,int ay,int bx,int by,short int line_color);
 
@@ -293,10 +299,10 @@ void initial_clear();
 void initial_clear_chars();
 
 // clear the screen between frames (fast clear);
-void clear_screen(LinkedList* list);
+void clear_screen(LinkedList* list,int size);
 
 // check if coordinates is on game board
-bool check_bounds(int x,int y);
+bool check_bounds(int x,int y,int size);
 
 
 /* HELPER FUNCTIONS END */
@@ -346,6 +352,10 @@ void main_menu(){
 }
 
 void presets(){
+	const int tile_size = 2; // 2x2
+	const int board_x = RESOLUTION_X/tile_size;
+	const int board_y = RESOLUTION_Y/tile_size;
+	
 	// Title and instructions
 	char* str = "Game of Life Presets\0";
 	draw_text((80-strlen(str))/2, 1,str);
@@ -353,28 +363,32 @@ void presets(){
 	draw_text(4, 4, str);
 	str = "Press pushbutton 0 to start simulation.\0";
 	draw_text(4, 6, str);
-	str = "Back to Main Menu<<"; // clicky stuff?
+	str = "Back to Main Menu<<\0"; // clicky stuff?
 	draw_text(2, 57, str);
 	char* credits = "Stephen and Yvonne, 2021\0";
 	draw_text(55,58,credits);
 
     // 1. Still Life
-	str = "1. Still Life";
-	draw_text(4, 9, str);
+	str = "1. Still Life\0";
+	draw_text(4, 10, str);
+	block(50, 25);
+	tub(60, 25);
+	ship(70, 25);
 	
 	// 2. Oscillators
-	str = "2. Oscillators";
+	str = "2. Oscillators\0";
 	draw_text(4, 20, str);
-	pulsar(160, 100);
+	pulsar(80, 50);
 	
 	// 3. Space ships
-	str = "3. Space ships";
+	str = "3. Space ships\0";
 	draw_text(4, 30, str);
+	glider(70, 75);
 	
 	// 4. Logic gates
-	str = "4. Logic gates and other cool stuff";
+	str = "4. Logic gates and other cool stuff\0";
 	draw_text(4, 50, str);
-	draw_ECE243(200, 200);
+	draw_ECE243(100, 100);
 	
 	/* // scratch this, this is kinda stupid
 	draw_board(0,RESOLUTION_X,0,RESOLUTION_Y);
@@ -396,13 +410,13 @@ void presets(){
 		deleteList(front_list);
         front_list->head = pixel_list->head;//back_list->head;
         //back_list->head = pixel_list->head;
-        clear_screen(front_list);
+        clear_screen(front_list,tile_size);
         pixel_list = init();
         front_list = init();
         // finish clearing previously drawn pixels
 		
         // draw, then update the game board
-        update_board_state(0,RESOLUTION_X,0,RESOLUTION_Y);
+        update_board_state(0,board_x,0,board_y, tile_size);
 
         wait_for_vsync(); // swap front and back buffers on VGA vertical sync
         pixel_buffer_start = *(pixel_ctrl_ptr + 1); // new back buffer
@@ -413,9 +427,9 @@ void presets(){
 }
 
 /* draw, then update and compare the next board to the previous board */
-void update_board_state(int x0, int x1, int y0, int y1){
-	bool new_board[RESOLUTION_X][RESOLUTION_Y];
-    int total = 0,n = RESOLUTION_X,m = RESOLUTION_Y;
+void update_board_state(int x0, int x1, int y0, int y1, int size){
+	int total = 0,n = RESOLUTION_X/size,m = RESOLUTION_Y/size;
+    bool new_board[n][m];
     for(int i=x0;i < x1;i++){
       for(int j=y0;j < y1;j++){
         total = (game_board[(i-1)%n][(j-1)%m]+game_board[(i-1)%n][j]
@@ -426,7 +440,7 @@ void update_board_state(int x0, int x1, int y0, int y1){
         //printf("%d %d:%d\n",i,j,total);
 
         if(game_board[i][j]==ALIVE){
-            draw_pixel(i,j,tile_color);
+            draw_tile(i*size,j*size,size,tile_color);
 			
             // cell dies if it has insufficient or too many neighbours
             if(total < 2 || total > 3){
@@ -450,8 +464,8 @@ void update_board_state(int x0, int x1, int y0, int y1){
 		prev_board[i][j] = game_board[i][j];
       }
     }
-    for(int i=0;i < RESOLUTION_X;i++){
-      for(int j=0;j < RESOLUTION_Y;j++){
+    for(int i=x0;i < x1;i++){
+      for(int j=y0;j < y1;j++){
 		 game_board[i][j] = new_board[i][j];
 	  }
 	}
@@ -471,11 +485,17 @@ void initialize_board(){
     //random_initialization(0.90);
 }
 
+// spaceship 3x3
+void glider (int left_x, int top_y){
+	game_board[left_x][top_y+2] = ALIVE;
+	game_board[left_x+1][top_y+2] = ALIVE;
+	game_board[left_x+2][top_y+2] = ALIVE;
+	game_board[left_x+2][top_y+1] = ALIVE;
+	game_board[left_x+1][top_y] = ALIVE;
+}
 
 // 12x12
 void pulsar(int centre_x, int centre_y){
-	if (!check_bounds(centre_x+6, centre_y+6) || 
-		!check_bounds(centre_x-6, centre_y-6)) return;
 	for (int d = 2; d <=4; d++)
 	{
 		game_board[centre_x+d][centre_y+6] = ALIVE;
@@ -496,6 +516,32 @@ void pulsar(int centre_x, int centre_y){
 		game_board[centre_x-6][centre_y-d] = ALIVE;
 		game_board[centre_x-1][centre_y-d] = ALIVE;
 	}
+}
+
+// still-life, 3x3
+void tub(int centre_x, int centre_y){
+	game_board[centre_x][centre_y+1] = ALIVE;
+	game_board[centre_x][centre_y-1] = ALIVE;
+	game_board[centre_x+1][centre_y] = ALIVE;
+	game_board[centre_x-1][centre_y] = ALIVE;
+}
+
+// still-life 2x2
+void block(int left_x, int top_y){
+	game_board[left_x][top_y] = ALIVE;
+	game_board[left_x+1][top_y] = ALIVE;
+	game_board[left_x+1][top_y-1] = ALIVE;
+	game_board[left_x][top_y-1] = ALIVE;
+}
+
+// still-life 3x3
+void ship(int centre_x, int centre_y){
+	game_board[centre_x][centre_y+1] = ALIVE;
+	game_board[centre_x][centre_y-1] = ALIVE;
+	game_board[centre_x+1][centre_y] = ALIVE;
+	game_board[centre_x-1][centre_y] = ALIVE;
+	game_board[centre_x+1][centre_y+1] = ALIVE;
+	game_board[centre_x-1][centre_y-1] = ALIVE;
 }
 
 // 37x5
@@ -563,12 +609,12 @@ void draw_ECE243(int left_x, int top_y){
 	}
 }
 
-
-void draw_board(int x0, int x1, int y0, int y1){
+// be careful that x1<RESOLUTION_X/size and y1<RESOLUTION_Y/size
+void draw_board(int x0, int x1, int y0, int y1, int size){
 	for(int i=x0;i<x1;i++){
 		for(int j=y0;j<y1;j++){
 			if (game_board[i][j]==ALIVE)
-				draw_pixel(i,j,tile_color);
+				draw_tile(i*size,j*size,size,tile_color);
 		}
 	}
 }
@@ -585,6 +631,14 @@ void random_initialization(float prop){
   }
 }
 
+
+void draw_tile(int x, int y, int size, short int line_color){
+	for (int i = x; i < x+size; i++){
+		for (int j = y; j < y+size; j++){
+			draw_pixel(i,j,line_color);
+		}
+	}
+}
 
 void draw_pixel(int x, int y, short int line_color)
 {
@@ -669,19 +723,19 @@ void initial_clear_chars(){
 	}
 }
 
-void clear_screen(LinkedList* list){
+void clear_screen(LinkedList* list, int size){
   if(isEmpty(list)){
     return;
   }
   while(list->head!=NULL){
     // clear screen by drawing background colour over previously drawn pixels
-    draw_pixel(list->head->x,list->head->y,bg_color);
+    draw_tile(list->head->x*size,list->head->y*size,size,bg_color);
     deleteFront(list);
   }
 }
 
-bool check_bounds(int x,int y){
-    return (x<RESOLUTION_X&&x>=0)&&(y<RESOLUTION_Y&&y>=0);
+bool check_bounds(int x,int y,int size){
+    return (x<RESOLUTION_X/size&&x>=0)&&(y<RESOLUTION_Y/size&&y>=0);
 }
 
 // set up IRQ stack pointer
@@ -709,7 +763,7 @@ void enable_interrupts()
 // configure keys
 void config_KEYs(){
 	volatile int * KEY_ptr = (int *)KEY_BASE; // pushbutton KEY address
-	*(KEY_ptr + 2) = 0x1; // enable interrupts for KEY[1]
+	*(KEY_ptr + 2) = 0x3; // enable interrupts for KEY[1]
 }
 
 // interrupt service routine for KEYs
