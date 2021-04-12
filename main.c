@@ -252,6 +252,9 @@ void update_board_state(int x0, int x1, int y0, int y1, int size);
 void ship(int centre_x, int centre_y);
 void block(int left_x, int top_y);
 void tub(int centre_x, int centre_y);
+void blinker(int centre_x, int centre_y);
+void toad(int left_x, int top_y);
+void tub(int centre_x, int centre_y);
 void glider(int left_x, int top_y);
 void pulsar(int centre_x, int centre_y);
 void draw_ECE243(int left_x, int top_y);
@@ -371,19 +374,21 @@ void presets(){
     // 1. Still Life
 	str = "1. Still Life\0";
 	draw_text(4, 10, str);
-	block(50, 25);
+	block(49, 25);
 	tub(60, 25);
 	ship(70, 25);
 	
 	// 2. Oscillators
 	str = "2. Oscillators\0";
 	draw_text(4, 20, str);
+	blinker(50, 50);
+	toad(60, 49);
 	pulsar(80, 50);
 	
 	// 3. Space ships
 	str = "3. Space ships\0";
 	draw_text(4, 30, str);
-	glider(70, 75);
+	glider(50, 70);
 	
 	// 4. Logic gates
 	str = "4. Logic gates and other cool stuff\0";
@@ -543,6 +548,22 @@ void ship(int centre_x, int centre_y){
 	game_board[centre_x+1][centre_y+1] = ALIVE;
 	game_board[centre_x-1][centre_y-1] = ALIVE;
 }
+
+// period 2 oscillator 3x3
+void blinker(int centre_x, int centre_y){
+	for (int x = centre_x-1; x < centre_x+2; x++){
+		game_board[x][centre_y] = ALIVE;
+	}
+}
+
+// period 2 oscillator 4x4
+void toad(int left_x, int top_y){
+	for (int x = left_x; x < left_x+3; x++){
+		game_board[x][top_y] = ALIVE;
+		game_board[x+1][top_y+1] = ALIVE;
+	}
+}
+
 
 // 37x5
 void draw_ECE243(int left_x, int top_y){
