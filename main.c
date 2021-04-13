@@ -355,9 +355,60 @@ int main(void)
 }
 
 void main_menu(){
-	// get input and a bunch of logic here
-	//presets();
-	logic_gates();
+	initial_clear();
+	initial_clear_chars();
+	
+	const int tile_size = 5; // 5x5
+	const int board_x = RESOLUTION_X/tile_size;
+	const int board_y = RESOLUTION_Y/tile_size;
+	isPaused = true;
+	
+	// Title and menu options
+	char* str = "Game of Life\0";
+	draw_text((80-strlen(str))/2, 1,str);
+	str = "Welcome to Conway's Game of Life.\0";
+	draw_text((80-strlen(str))/2, 4, str);
+	str = "Press pushbutton 0 to start simulation.\0";
+	draw_text(4, 6, str);
+	str = "Use switches or the mouse to select a menu option.\0";
+	draw_text(4, 8, str);
+	char* credits = "Stephen and Yvonne, 2021\0";
+	draw_text(55,58,credits);
+	
+	str = "1. Random\0";
+	draw_text(30, 12, str);
+	str = "2. Draw your own\0";
+	draw_text(30, 16, str);
+	str = "3. Presets\0";
+	draw_text(30, 20, str);
+	
+	draw_ECE243(11, 30);
+	
+	// simulation loop
+	int total_iterations = 0;
+    while (1)
+    {
+		if (total_iterations > 0 && isPaused) // display the initial config
+			continue;
+		
+        // start clearing previously drawn pixels
+		deleteList(front_list);
+        front_list->head = pixel_list->head;//back_list->head;
+        //back_list->head = pixel_list->head;
+        clear_screen(front_list,tile_size);
+        pixel_list = init();
+        front_list = init();
+        // finish clearing previously drawn pixels
+		
+        // draw, then update the game board
+        update_board_state(0,board_x,0,board_y, tile_size);
+
+        wait_for_vsync(); // swap front and back buffers on VGA vertical sync
+        pixel_buffer_start = *(pixel_ctrl_ptr + 1); // new back buffer
+		
+		total_iterations++;
+    }
+	
 }
 
 void presets(){
@@ -395,23 +446,17 @@ void presets(){
 	toad(60, 49);
 	pulsar(80, 50);
 	
-	// 3. Space ships
-	str = "3. Space ships\0";
+	// 3. Space ships and Guns
+	str = "3. Space ships and Guns\0";
 	draw_text(4, 30, str);
 	glider(50, 70);
+	glider_gun(80, 70, true);
 	
+	/*
 	// 4. Logic gates
 	str = "4. Logic gates and other cool stuff\0";
 	draw_text(4, 50, str);
 	draw_ECE243(100, 100);
-	
-	/* // scratch this, this is kinda stupid
-	draw_board(0,RESOLUTION_X,0,RESOLUTION_Y);
-    wait_for_vsync(); // swap front and back buffers on VGA vertical sync
-    pixel_buffer_start = *(pixel_ctrl_ptr + 1); // new back buffer
-	draw_board(0,RESOLUTION_X,0,RESOLUTION_Y);
-    wait_for_vsync(); // swap front and back buffers on VGA vertical sync
-    pixel_buffer_start = *(pixel_ctrl_ptr + 1); // new back buffer
 	*/
 	
 	// simulation loop
@@ -439,7 +484,7 @@ void presets(){
 		total_iterations++;
     }
 }
-
+/*
 void logic_gates(){
 	initial_clear();
 	initial_clear_chars();
@@ -457,7 +502,7 @@ void logic_gates(){
 	str = "instructions blah blah\0";
 	draw_text(4, 6, str);
 	
-	glider_gun(5, 20, true);
+	glider_gun(5, 10, true);
 	
 	// simulation loop
 	int total_iterations = 0;
@@ -484,7 +529,7 @@ void logic_gates(){
 		total_iterations++;
     }
 }
-
+*/
 
 /* draw, then update and compare the next board to the previous board */
 void update_board_state(int x0, int x1, int y0, int y1, int size){
