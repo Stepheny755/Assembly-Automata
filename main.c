@@ -118,6 +118,7 @@ volatile int pixel_buffer_start; // global variable
 typedef struct node{
   int x;
   int y;
+  bool isTile;
   struct node* next;
 }Node;
 
@@ -125,11 +126,12 @@ typedef struct linkedlist{
   Node* head;
 }LinkedList;
 
-Node* createNode(int x,int y){
+Node* createNode(int x,int y,bool isTile){
   Node* temp = (Node*)malloc(sizeof(Node));
   temp->x = x;
   temp->y = y;
   temp->next = NULL;
+  temp->isTile = isTile;
   if(temp==NULL){
     printf("Error: Could not allocate memory for node");
   }
@@ -149,22 +151,22 @@ bool isEmpty(LinkedList* list){
   return (list->head==NULL);
 }
 
-void insertFront(LinkedList* list,int x,int y){
-  Node* temp = createNode(x,y);
+void insertFront(LinkedList* list,int x,int y,bool isTile){
+  Node* temp = createNode(x,y,isTile);
   temp->next = list->head;
   list->head = temp;
 }
 
-void insertTail(LinkedList* list,int x,int y){
+void insertTail(LinkedList* list,int x,int y,bool isTile){
   if(isEmpty(list)){
-    list->head=createNode(x,y);
+    list->head=createNode(x,y,isTile);
     return;
   }
   Node* temp = list->head;
   while(temp->next!=NULL){
     temp=temp->next;
   }
-  temp->next = createNode(x,y);
+  temp->next = createNode(x,y,isTile);
 }
 
 void deleteFront(LinkedList* list){
@@ -322,12 +324,6 @@ void draw_pixel(int x, int y, short int line_color);
 void draw_tile(int x, int y, int size, short int line_color);
 
 void draw_tile_clear(int x,int y,int size,short int line_color);
-
-// draw a line with given colour between coordinates
-void draw_line(int ax,int ay,int bx,int by,short int line_color);
-
-// draw a square with given width/height at the coordinates
-void draw_rect(int x,int y,int width, int height,short int color);
 
 // draw a string of text on character buffer
 void draw_text(int x, int y, char * text_ptr);
@@ -665,7 +661,6 @@ void presets(){
 
         update_board_state(0,board_x,0,board_y, tile_size);
 
-
         wait_for_vsync(); // swap front and back buffers on VGA vertical sync
         pixel_buffer_start = *(pixel_ctrl_ptr + 1); // new back buffer
 
@@ -740,7 +735,7 @@ void update_board_state(int x0, int x1, int y0, int y1, int size){
 
         if(game_board[i][j]==ALIVE){
             draw_tile(i*size,j*size,size,tile_color);
-            insertFront(pixel_list,i,j);
+            insertFront(pixel_list,i,j,true);
 
             // cell dies if it has insufficient or too many neighbours
             if(total < 2 || total > 3){
@@ -1026,7 +1021,6 @@ void update_mouse_coords(int disp_x,int disp_y){
     }else if(mouse_y+mouse_height>RESOLUTION_Y){
         mouse_y = RESOLUTION_Y-mouse_height;
     }
-    
     //printf("old mouse coordinates: %d %d.\nnew mouse coordinates: %d %d",tempx,tempy,mouse_x,mouse_y);
 }
 
@@ -1057,38 +1051,6 @@ void draw_pixel(int x, int y, short int line_color)
     *(short int *)(pixel_buffer_start + (y << 10) + (x << 1)) = line_color;
 }
 
-void draw_line(int ax,int ay,int bx,int by,short int line_color){
-
-    int dx=ABS(bx-ax);
-    int dy=-ABS(by-ay);
-    int sx=(ax<bx)?1:-1;
-    int sy=(ay<by)?1:-1;
-    int error = dx+dy, err2;
-
-    for(int x = ax,y = ay;!(x==bx&&y==by);){
-      draw_pixel(x,y,line_color);
-      insertFront(pixel_list,x,y);
-      err2 = 2*error;
-      if(err2>=dy){
-        x+=sx;
-        error+=dy;
-      }
-      if(err2<=dx){
-        y+=sy;
-        error+=dx;
-      }
-    }
-}
-
-void draw_rect(int x,int y,int width, int height,short int color){
-    for(int i = -width;i<width;i++){
-       for(int j = -width;j<height;j++){
-          draw_pixel(x+i,y+j,color);
-          insertFront(pixel_list,x+i,y+j);
-       }
-    }
-}
-
 void draw_text(int x, int y, char * text_ptr) {
 	int offset;
 	volatile char * character_buffer =
@@ -1104,8 +1066,12 @@ void draw_text(int x, int y, char * text_ptr) {
 }
 
 void draw_cursor(short int color){
-  draw_rect(mouse_x,mouse_y,mouse_width,mouse_height,color);
-
+  for(int i = -mouse_width;i<mouse_width;i++){
+     for(int j = -mouse_height;j<mouse_height;j++){
+        draw_pixel(mouse_x+i,mouse_y+j,color);
+        insertFront(pixel_list,mouse_x+i,mouse_y+j,false);
+     }
+  }
 }
 
 void wait_for_vsync(){
@@ -1125,7 +1091,7 @@ void initial_clear(){
       for(int j =0;j<RESOLUTION_Y;j++){
         // clear screen by drawing everything to color of background
         	draw_pixel(i,j,bg_color);
-		  game_board[i][j] = DEAD;
+    		  game_board[i][j] = DEAD;
       }
     }
 }
@@ -1156,7 +1122,11 @@ void clear_screen(LinkedList* list, int size){
   }
   while(list->head!=NULL){
     // clear screen by drawing background colour over previously drawn pixels
-    draw_tile_clear(list->head->x*size,list->head->y*size,size,bg_color);
+    if(list->head->isTile){
+      draw_tile_clear(list->head->x*size,list->head->y*size,size,bg_color);
+    }else{
+      draw_pixel(list->head->x,list->head->y,bg_color);
+    }
     deleteFront(list);
   }
 }
