@@ -218,7 +218,7 @@ volatile int * pixel_ctrl_ptr = (int *)0xFF203020;
 // global drawn pixels linked lists
 LinkedList* pixel_list;
 LinkedList* front_list;
-//LinkedList* back_list;
+LinkedList* back_list;
 
 // game board
 bool game_board[RESOLUTION_X][RESOLUTION_Y];
@@ -259,7 +259,7 @@ void initialize_board();
 // draw the game board (a rectangle in the screen)
 
 void draw_board(int x0, int x1, int y0, int y1, int size);
-	
+
 // initialize the board randomly with prop % chance that a cell is alive at the start
 void random_initialization(int x0, int x1, int y0, int y1, float prop);
 
@@ -312,7 +312,7 @@ void initialize_mouse_coords();
 void update_mouse_coords(int disp_x,int disp_y);
 
 //void SW_ISR();
-	
+
 // enable interrupts after setting up devices
 void enable_interrupts();
 
@@ -320,6 +320,8 @@ void enable_interrupts();
 void draw_pixel(int x, int y, short int line_color);
 
 void draw_tile(int x, int y, int size, short int line_color);
+
+void draw_tile_clear(int x,int y,int size,short int line_color);
 
 // draw a line with given colour between coordinates
 void draw_line(int ax,int ay,int bx,int by,short int line_color);
@@ -345,6 +347,9 @@ void initial_clear_chars();
 // clear the screen between frames (fast clear);
 void clear_screen(LinkedList* list,int size);
 
+// clear everything
+void clear(int tile_size);
+
 // check if coordinates is on game board
 bool check_bounds(int x,int y,int size);
 
@@ -360,6 +365,7 @@ int main(void)
     isPaused = true;
 
     pixel_list = init();
+    back_list = init();
     front_list = init();
 
 	//srand(time(NULL));
@@ -388,7 +394,7 @@ int main(void)
     *(pixel_ctrl_ptr + 1) = 0xC0000000;
     pixel_buffer_start = *(pixel_ctrl_ptr + 1); // we draw on the back buffer
     initial_clear();
-	
+
 	screen = MAIN_MENU;
 
 	main_menu();
@@ -397,17 +403,17 @@ int main(void)
 void main_menu(){
 	initial_clear();
 	wait_for_vsync(); // swap front and back buffers on VGA vertical sync
-    pixel_buffer_start = *(pixel_ctrl_ptr + 1); // new back buffer	
+    pixel_buffer_start = *(pixel_ctrl_ptr + 1); // new back buffer
 	initial_clear();
 	wait_for_vsync(); // swap front and back buffers on VGA vertical sync
-    pixel_buffer_start = *(pixel_ctrl_ptr + 1); // new back buffer	
+    pixel_buffer_start = *(pixel_ctrl_ptr + 1); // new back buffer
 	initial_clear_chars();
-	
+
 	const int tile_size = 5; // 5x5
 	const int board_x = RESOLUTION_X/tile_size;
 	const int board_y = RESOLUTION_Y/tile_size;
 	isPaused = true;
-	
+
 	// Title and menu options
 	char* str = "Game of Life\0";
 	draw_text((80-strlen(str))/2, 1,str);
@@ -419,16 +425,16 @@ void main_menu(){
 	draw_text(4, 8, str);
 	char* credits = "Stephen and Yvonne, 2021\0";
 	draw_text(55,58,credits);
-	
+
 	str = "1. Random\0";
 	draw_text(30, 12, str);
 	str = "2. Draw your own\0";
 	draw_text(30, 16, str);
 	str = "3. Presets\0";
 	draw_text(30, 20, str);
-	
+
 	draw_ECE243(11, 30);
-	
+
 	// simulation loop
 	int total_iterations = 0;
     while (1)
@@ -436,22 +442,17 @@ void main_menu(){
 		if (screen != MAIN_MENU) break;
 		if (total_iterations > 0 && isPaused) // display the initial config
 			continue;
-		
+
         // start clearing previously drawn pixels
-		deleteList(front_list);
-        front_list->head = pixel_list->head;//back_list->head;
-        //back_list->head = pixel_list->head;
-        clear_screen(front_list,tile_size);
-        pixel_list = init();
-        front_list = init();
+    		clear(tile_size);
         // finish clearing previously drawn pixels
-		
+
         // draw, then update the game board
         update_board_state(0,board_x,0,board_y, tile_size);
 
         wait_for_vsync(); // swap front and back buffers on VGA vertical sync
         pixel_buffer_start = *(pixel_ctrl_ptr + 1); // new back buffer
-		
+
 		total_iterations++;
     }
 	if (screen == RANDOM)
@@ -467,19 +468,19 @@ void main_menu(){
 void random_screen(){
 	initial_clear();
 	wait_for_vsync(); // swap front and back buffers on VGA vertical sync
-    pixel_buffer_start = *(pixel_ctrl_ptr + 1); // new back buffer	
+    pixel_buffer_start = *(pixel_ctrl_ptr + 1); // new back buffer
 	initial_clear();
 	wait_for_vsync(); // swap front and back buffers on VGA vertical sync
-    pixel_buffer_start = *(pixel_ctrl_ptr + 1); // new back buffer	
+    pixel_buffer_start = *(pixel_ctrl_ptr + 1); // new back buffer
 	initial_clear_chars();
-	
-	const int tile_size = 6; 
+
+	const int tile_size = 6;
 	const int board_x0 = 15/tile_size;
 	const int board_y0 = 40/tile_size;
 	const int board_x1 = (RESOLUTION_X-15)/tile_size;
 	const int board_y1 = (RESOLUTION_Y-25)/tile_size;
 	isPaused = true;
-	
+
 	// Title and instructions
 	char* str = "Game of Life Random Generator\0";
 	draw_text((80-strlen(str))/2, 1,str);
@@ -493,7 +494,7 @@ void random_screen(){
 	draw_text(55,58,credits);
 
 	random_initialization(board_x0, board_x1, board_y0, board_y1, 0.9);
-	
+
 	// simulation loop
 	int total_iterations = 0;
     while (1)
@@ -501,22 +502,17 @@ void random_screen(){
 		if (screen != RANDOM) break;
 		if (total_iterations > 0 && isPaused) // display the initial config
 			continue;
-		
+
         // start clearing previously drawn pixels
-		deleteList(front_list);
-        front_list->head = pixel_list->head;//back_list->head;
-        //back_list->head = pixel_list->head;
-        clear_screen(front_list,tile_size);
-        pixel_list = init();
-        front_list = init();
+        clear(tile_size);
         // finish clearing previously drawn pixels
-		
+
         // draw, then update the game board
         update_board_state(board_x0,board_x1,board_y0,board_y1, tile_size);
 
         wait_for_vsync(); // swap front and back buffers on VGA vertical sync
         pixel_buffer_start = *(pixel_ctrl_ptr + 1); // new back buffer
-		
+
 		total_iterations++;
     }
 	if (screen == USER_DRAWING)
@@ -532,17 +528,17 @@ void random_screen(){
 void user_drawing(){
 	initial_clear();
 	wait_for_vsync(); // swap front and back buffers on VGA vertical sync
-    pixel_buffer_start = *(pixel_ctrl_ptr + 1); // new back buffer	
+    pixel_buffer_start = *(pixel_ctrl_ptr + 1); // new back buffer
 	initial_clear();
 	wait_for_vsync(); // swap front and back buffers on VGA vertical sync
-    pixel_buffer_start = *(pixel_ctrl_ptr + 1); // new back buffer	
+    pixel_buffer_start = *(pixel_ctrl_ptr + 1); // new back buffer
 	initial_clear_chars();
-	
+
 	const int tile_size = 5; // 5x5
 	const int board_x = RESOLUTION_X/tile_size;
 	const int board_y = RESOLUTION_Y/tile_size;
 	isPaused = false;
-	
+
 	// Title and instructions
 	char* str = "Game of Life - Draw your own\0";
 	draw_text((80-strlen(str))/2, 1,str);
@@ -554,7 +550,7 @@ void user_drawing(){
 	draw_text(2, 57, str);
 	char* credits = "Stephen and Yvonne, 2021\0";
 	draw_text(55,58,credits);
-	
+
 	// simulation loop
 	int total_iterations = 0;
     while (1)
@@ -562,24 +558,19 @@ void user_drawing(){
 		if (screen != USER_DRAWING) break;
 		if (total_iterations > 0 && isPaused) // display the initial config
 			continue;
-		
+
         // start clearing previously drawn pixels
-		deleteList(front_list);
-        front_list->head = pixel_list->head;//back_list->head;
-        //back_list->head = pixel_list->head;
-        clear_screen(front_list,tile_size);
-        pixel_list = init();
-        front_list = init();
+		    clear(tile_size);
         // finish clearing previously drawn pixels
-		
+
         // draw, then update the game board
         update_board_state(0,board_x,0,board_y, tile_size);
-      
+
         draw_cursor(GREEN);
 
         wait_for_vsync(); // swap front and back buffers on VGA vertical sync
         pixel_buffer_start = *(pixel_ctrl_ptr + 1); // new back buffer
-		
+
 		total_iterations++;
     }
 	if (screen == RANDOM)
@@ -594,17 +585,17 @@ void user_drawing(){
 void presets(){
 	initial_clear();
 	wait_for_vsync(); // swap front and back buffers on VGA vertical sync
-    pixel_buffer_start = *(pixel_ctrl_ptr + 1); // new back buffer	
+    pixel_buffer_start = *(pixel_ctrl_ptr + 1); // new back buffer
 	initial_clear();
 	wait_for_vsync(); // swap front and back buffers on VGA vertical sync
-    pixel_buffer_start = *(pixel_ctrl_ptr + 1); // new back buffer	
+    pixel_buffer_start = *(pixel_ctrl_ptr + 1); // new back buffer
 	initial_clear_chars();
-	
+
 	const int tile_size = 2; // 2x2
 	const int board_x = RESOLUTION_X/tile_size;
 	const int board_y = RESOLUTION_Y/tile_size;
 	isPaused = true;
-	
+
 	// Title and instructions
 	char* str = "Game of Life Presets\0";
 	draw_text((80-strlen(str))/2, 1,str);
@@ -624,7 +615,7 @@ void presets(){
 	block(49, 25);
 	tub(60, 25);
 	ship(70, 25);
-	
+
 	// 2. Oscillators
 	str = "2. Oscillators\0";
 	draw_text(4, 20, str);
@@ -632,13 +623,13 @@ void presets(){
 	blinker(50, 50);
 	toad(60, 49);
 	pulsar(80, 50);
-	
+
 	// 3. Space ships and Guns
 	str = "3. Space ships and Guns\0";
 	draw_text(4, 30, str);
 	glider(50, 70);
 	glider_gun(80, 70, true);
-	
+
 	/*
 
 	// 4. Logic gates
@@ -666,17 +657,12 @@ void presets(){
 			continue;
 
         // start clearing previously drawn pixels
-		    deleteList(front_list);
-        front_list->head = pixel_list->head;//back_list->head;
-        //back_list->head = pixel_list->head;
-        clear_screen(front_list,tile_size);
-        pixel_list = init();
-        front_list = init();
+        clear(tile_size);
         // finish clearing previously drawn pixels
 
         // draw, then update the game board
         //update_board_state(0,RESOLUTION_X,0,RESOLUTION_Y);
-      
+
         update_board_state(0,board_x,0,board_y, tile_size);
 
 
@@ -696,12 +682,12 @@ void presets(){
 void logic_gates(){
 	initial_clear();
 	initial_clear_chars();
-	
+
 	const int tile_size = 4; // 2x2
 	const int board_x = RESOLUTION_X/tile_size;
 	const int board_y = RESOLUTION_Y/tile_size;
 	isPaused = true;
-	
+
 	// draw text
 	char* str = "Game of Life Presets\0";
 	draw_text((80-strlen(str))/2, 1,str);
@@ -709,16 +695,16 @@ void logic_gates(){
 	draw_text((80-strlen(str))/2, 3,str);
 	str = "instructions blah blah\0";
 	draw_text(4, 6, str);
-	
+
 	glider_gun(5, 10, true);
-	
+
 	// simulation loop
 	int total_iterations = 0;
     while (1)
     {
 		if (total_iterations > 0 && isPaused) // display the initial config
 			continue;
-		
+
         // start clearing previously drawn pixels
 		deleteList(front_list);
         front_list->head = pixel_list->head;//back_list->head;
@@ -727,13 +713,13 @@ void logic_gates(){
         pixel_list = init();
         front_list = init();
         // finish clearing previously drawn pixels
-		
+
         // draw, then update the game board
         update_board_state(0,board_x,0,board_y, tile_size);
 
         wait_for_vsync(); // swap front and back buffers on VGA vertical sync
         pixel_buffer_start = *(pixel_ctrl_ptr + 1); // new back buffer
-		
+
 		total_iterations++;
     }
 }
@@ -754,7 +740,8 @@ void update_board_state(int x0, int x1, int y0, int y1, int size){
 
         if(game_board[i][j]==ALIVE){
             draw_tile(i*size,j*size,size,tile_color);
-			
+            insertFront(pixel_list,i,j);
+
             // cell dies if it has insufficient or too many neighbours
             if(total < 2 || total > 3){
                 new_board[i][j] = DEAD;
@@ -773,7 +760,7 @@ void update_board_state(int x0, int x1, int y0, int y1, int size){
         }
 
 		if (prev_board[i][j]==ALIVE && new_board[i][j]==DEAD)
-			insertFront(pixel_list, i, j);
+
 		prev_board[i][j] = game_board[i][j];
       }
     }
@@ -827,7 +814,7 @@ void glider_gun(int left_x, int top_y, bool hor_not_vert){
 		game_board[left_x+24][top_y+6] = ALIVE;
 	}
 	else{
-	
+
 	}
 }
 
@@ -994,6 +981,7 @@ void draw_board(int x0, int x1, int y0, int y1, int size){
 
 void random_initialization(int x0, int x1, int y0, int y1, float prop){
   int denom = 1000;
+  srand(time(0));
   for(int i=x0;i < x1;i++){
       for(int j=y0;j < y1;j++){
           if(rand()%denom>prop*denom){
@@ -1003,7 +991,7 @@ void random_initialization(int x0, int x1, int y0, int y1, float prop){
   }
 }
 
-initialize_mouse_coords(){
+void initialize_mouse_coords(){
     // place mouse cursor in the middle of the screen
     mouse_x = RESOLUTION_X/2;
     mouse_y = RESOLUTION_Y/2;
@@ -1012,14 +1000,54 @@ initialize_mouse_coords(){
 }
 
 void update_mouse_coords(int disp_x,int disp_y){
+
+    if(disp_x>10){
+      disp_x = 10;
+    }else if (disp_x<-10){
+      disp_x = -10;
+    }
+    if(disp_y>10){
+      disp_y = 10;
+    }else if(disp_y<-10){
+      disp_y = -10;
+    }
+
+    mouse_x+=disp_x;
+    mouse_y+=disp_y;
+
+    if(mouse_x-mouse_width<0){
+        mouse_x = mouse_width;
+    }else if(mouse_x+mouse_width>RESOLUTION_X){
+        mouse_x = RESOLUTION_X-mouse_width;
+    }
+
+    if(mouse_y-mouse_height<0){
+        mouse_y = mouse_height;
+    }else if(mouse_y+mouse_height>RESOLUTION_Y){
+        mouse_y = RESOLUTION_Y-mouse_height;
+    }
     
+    //printf("old mouse coordinates: %d %d.\nnew mouse coordinates: %d %d",tempx,tempy,mouse_x,mouse_y);
 }
 
 
 void draw_tile(int x, int y, int size, short int line_color){
 	for (int i = x; i < x+size; i++){
 		for (int j = y; j < y+size; j++){
-			draw_pixel(i,j,line_color);
+      if(check_bounds(i,j,1)){
+        draw_pixel(i,j,line_color);
+        //insertFront(pixel_list,i,j);
+      }
+		}
+	}
+}
+
+void draw_tile_clear(int x,int y,int size,short int line_color){
+  for (int i = x; i < x+size; i++){
+		for (int j = y; j < y+size; j++){
+      if(check_bounds(i,j,1)){
+        draw_pixel(i,j,line_color);
+      }
 		}
 	}
 }
@@ -1113,13 +1141,22 @@ void initial_clear_chars(){
 	}
 }
 
+void clear(int tile_size){
+    deleteList(front_list);
+    front_list->head = back_list->head;
+    back_list->head = pixel_list->head;
+    clear_screen(front_list,tile_size);
+    pixel_list = init();
+    front_list = init();
+}
+
 void clear_screen(LinkedList* list, int size){
   if(isEmpty(list)){
     return;
   }
   while(list->head!=NULL){
     // clear screen by drawing background colour over previously drawn pixels
-    draw_tile(list->head->x*size,list->head->y*size,size,bg_color);
+    draw_tile_clear(list->head->x*size,list->head->y*size,size,bg_color);
     deleteFront(list);
   }
 }
@@ -1209,35 +1246,35 @@ void MOUSE_ISR(){
 
   while(RVALID || RAVAIL>0) {
 
+    printf("\n");
 
     byte1 = byte2;
     byte2 = byte3;
     byte3 = PS2_data & 0xFF;
 
-    // check if LMB or RMB has been clicked
-    if(byte1 & 1){
-      printf("LMB clicked");
-    }else if(byte1 & 2){
-      printf("RMB clicked");
-    }
-
     // finished receiving 3 byte data from mouse
     if(byte1!=0){
-        signed int x_movement = byte2*(((byte1&16)>0)?1:-1);
-        signed int y_movement = byte3*(((byte1&32)>0)?1:-1);
-        update_mouse_coords(x_movement,y_movement);
-        printf("movement :D %d %d\n",x_movement,y_movement);
+
+        // check if LMB or RMB has been clicked
+        if(byte1 & 1){
+          printf("LMB clicked\n");
+
+        }else if(byte1 & 2){
+          printf("RMB clicked\n");
+        }
+
+        int x_sign = ((byte1&16)>0);
+        int y_sign = ((byte1&32)>0);
+
+        int x_movement = x_sign?-(0xFF&(~byte2+1)):(byte2);
+        int y_movement = y_sign?-(0xFF&(~byte3+1)):(byte3);
+        update_mouse_coords(x_movement/2,y_movement/2);
+        //printf("sign bits are: %d %d\n",((byte1&16)>0),((byte1&32)>0));
+        //printf("data is %d %d\n",byte2,byte3);
+        //printf("test values: %d %d",)
+        //printf("movement : %d %d\n",x_movement,y_movement);
     }
 
-    printf("%d %d %d",byte1,byte2,byte3);
-
-    printf("ravail: %d\n",RAVAIL);
-    //HEX_PS2(byte1, byte2, byte3);
-    /*
-    if ((byte2 == (char)0xAA) && (byte3 == (char)0x00))
-    // mouse inserted; initialize sending of data
-      *(PS2_ptr) = 0xF4;
-    */
     PS2_data = *(PS2_ptr); // read the Data register in the PS/2 port
     RVALID = PS2_data & 0x8000; // extract the RVALID field
     RAVAIL = PS2_data & 0xFFFF0000;
