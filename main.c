@@ -235,6 +235,7 @@ bool isPaused;
 // program screens
 void main_menu();
 void presets();
+void logic_gates();
 
 // set the starting board state
 void initialize_board();
@@ -252,13 +253,17 @@ void update_board_state(int x0, int x1, int y0, int y1, int size);
 void ship(int centre_x, int centre_y);
 void block(int left_x, int top_y);
 void tub(int centre_x, int centre_y);
-void blinker(int centre_x, int centre_y);
 void toad(int left_x, int top_y);
-void tub(int centre_x, int centre_y);
+void blinker(int centre_x, int centre_y);
 void glider(int left_x, int top_y);
 void pulsar(int centre_x, int centre_y);
 void draw_ECE243(int left_x, int top_y);
 
+void glider_eater(int left_x, int top_y, bool hor_not_vert);
+void glider_gun(int left_x, int top_y, bool hor_not_vert);
+void and_gate(int left_x, int top_y);
+void or_gate(int left_x, int top_y);
+void not_gate(int left_x, int top_y);
 /* GAME FUNCTIONS END */
 
 
@@ -351,13 +356,18 @@ int main(void)
 
 void main_menu(){
 	// get input and a bunch of logic here
-	presets();
+	//presets();
+	logic_gates();
 }
 
 void presets(){
+	initial_clear();
+	initial_clear_chars();
+	
 	const int tile_size = 2; // 2x2
 	const int board_x = RESOLUTION_X/tile_size;
 	const int board_y = RESOLUTION_Y/tile_size;
+	isPaused = true;
 	
 	// Title and instructions
 	char* str = "Game of Life Presets\0";
@@ -428,8 +438,53 @@ void presets(){
 		
 		total_iterations++;
     }
-
 }
+
+void logic_gates(){
+	initial_clear();
+	initial_clear_chars();
+	
+	const int tile_size = 4; // 2x2
+	const int board_x = RESOLUTION_X/tile_size;
+	const int board_y = RESOLUTION_Y/tile_size;
+	isPaused = true;
+	
+	// draw text
+	char* str = "Game of Life Presets\0";
+	draw_text((80-strlen(str))/2, 1,str);
+	str = "- Logic gates\0";
+	draw_text((80-strlen(str))/2, 3,str);
+	str = "instructions blah blah\0";
+	draw_text(4, 6, str);
+	
+	glider_gun(5, 20, true);
+	
+	// simulation loop
+	int total_iterations = 0;
+    while (1)
+    {
+		if (total_iterations > 0 && isPaused) // display the initial config
+			continue;
+		
+        // start clearing previously drawn pixels
+		deleteList(front_list);
+        front_list->head = pixel_list->head;//back_list->head;
+        //back_list->head = pixel_list->head;
+        clear_screen(front_list,tile_size);
+        pixel_list = init();
+        front_list = init();
+        // finish clearing previously drawn pixels
+		
+        // draw, then update the game board
+        update_board_state(0,board_x,0,board_y, tile_size);
+
+        wait_for_vsync(); // swap front and back buffers on VGA vertical sync
+        pixel_buffer_start = *(pixel_ctrl_ptr + 1); // new back buffer
+		
+		total_iterations++;
+    }
+}
+
 
 /* draw, then update and compare the next board to the previous board */
 void update_board_state(int x0, int x1, int y0, int y1, int size){
@@ -490,6 +545,49 @@ void initialize_board(){
     //random_initialization(0.90);
 }
 
+// 36x9 for horizontal
+void glider_gun(int left_x, int top_y, bool hor_not_vert){
+	if (hor_not_vert){
+		block(left_x, top_y+4);
+		block(left_x+34, top_y+2);
+		for (int y = 0; y < 3; y++){
+			game_board[left_x+10][top_y+4+y] = ALIVE;
+			game_board[left_x+16][top_y+4+y] = ALIVE;
+			game_board[left_x+20][top_y+2+y] = ALIVE;
+			game_board[left_x+21][top_y+2+y] = ALIVE;
+		}
+		game_board[left_x+11][top_y+3] = ALIVE;
+		game_board[left_x+11][top_y+7] = ALIVE;
+		game_board[left_x+12][top_y+2] = ALIVE;
+		game_board[left_x+13][top_y+2] = ALIVE;
+		game_board[left_x+12][top_y+8] = ALIVE;
+		game_board[left_x+13][top_y+8] = ALIVE;
+		game_board[left_x+14][top_y+5] = ALIVE;
+		game_board[left_x+15][top_y+3] = ALIVE;
+		game_board[left_x+15][top_y+7] = ALIVE;
+		game_board[left_x+17][top_y+5] = ALIVE;
+		game_board[left_x+22][top_y+1] = ALIVE;
+		game_board[left_x+22][top_y+5] = ALIVE;
+		game_board[left_x+24][top_y] = ALIVE;
+		game_board[left_x+24][top_y+1] = ALIVE;
+		game_board[left_x+24][top_y+5] = ALIVE;
+		game_board[left_x+24][top_y+6] = ALIVE;
+	}
+	else{
+	
+	}
+}
+
+void glider_eater(int left_x, int top_y, bool hor_not_vert){
+}
+
+void and_gate(int left_x, int top_y){
+}
+void or_gate(int left_x, int top_y){
+}
+void not_gate(int left_x, int top_y){
+}
+
 // spaceship 3x3
 void glider (int left_x, int top_y){
 	game_board[left_x][top_y+2] = ALIVE;
@@ -535,8 +633,8 @@ void tub(int centre_x, int centre_y){
 void block(int left_x, int top_y){
 	game_board[left_x][top_y] = ALIVE;
 	game_board[left_x+1][top_y] = ALIVE;
-	game_board[left_x+1][top_y-1] = ALIVE;
-	game_board[left_x][top_y-1] = ALIVE;
+	game_board[left_x+1][top_y+1] = ALIVE;
+	game_board[left_x][top_y+1] = ALIVE;
 }
 
 // still-life 3x3
@@ -784,7 +882,7 @@ void enable_interrupts()
 // configure keys
 void config_KEYs(){
 	volatile int * KEY_ptr = (int *)KEY_BASE; // pushbutton KEY address
-	*(KEY_ptr + 2) = 0x3; // enable interrupts for KEY[1]
+	*(KEY_ptr + 2) = 0x1; // enable interrupts for KEY[0]
 }
 
 // interrupt service routine for KEYs
