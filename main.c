@@ -227,6 +227,10 @@ short int tile_color;
 // game states
 bool isPaused;
 
+// screen
+volatile int screen;
+enum Screens{MAIN_MENU, RANDOM, USER_DRAWING, PRESETS};
+
 /* GLOBAL VARIABLES END */
 
 
@@ -234,8 +238,10 @@ bool isPaused;
 
 // program screens
 void main_menu();
+void random_screen();
+void user_drawing();
 void presets();
-void logic_gates();
+//void logic_gates();
 
 // set the starting board state
 void initialize_board();
@@ -244,7 +250,7 @@ void initialize_board();
 void draw_board(int x0, int x1, int y0, int y1, int size);
 	
 // initialize the board randomly with prop % chance that a cell is alive at the start
-void random_initialization(float prop);
+void random_initialization(int x0, int x1, int y0, int y1, float prop);
 
 // update and draw the board (a rectangle in the screen)
 void update_board_state(int x0, int x1, int y0, int y1, int size);
@@ -277,8 +283,12 @@ void config_GIC();
 // configure keys
 void config_KEYs();
 
+//void config_SWs();
+
 // interrupt service routine for KEYs
 void KEY_ISR();
+
+//void SW_ISR();
 	
 // enable interrupts after setting up devices
 void enable_interrupts();
@@ -351,11 +361,17 @@ int main(void)
     pixel_buffer_start = *(pixel_ctrl_ptr + 1); // we draw on the back buffer
     initial_clear();
 	
+	screen = MAIN_MENU;
 	main_menu();
 }
 
 void main_menu(){
 	initial_clear();
+	wait_for_vsync(); // swap front and back buffers on VGA vertical sync
+    pixel_buffer_start = *(pixel_ctrl_ptr + 1); // new back buffer	
+	initial_clear();
+	wait_for_vsync(); // swap front and back buffers on VGA vertical sync
+    pixel_buffer_start = *(pixel_ctrl_ptr + 1); // new back buffer	
 	initial_clear_chars();
 	
 	const int tile_size = 5; // 5x5
@@ -388,6 +404,7 @@ void main_menu(){
 	int total_iterations = 0;
     while (1)
     {
+		if (screen != MAIN_MENU) break;
 		if (total_iterations > 0 && isPaused) // display the initial config
 			continue;
 		
@@ -408,11 +425,148 @@ void main_menu(){
 		
 		total_iterations++;
     }
+	if (screen == RANDOM)
+		random_screen();
+	else if (screen == USER_DRAWING)
+		user_drawing();
+	else if (screen == PRESETS)
+		presets();
+	else
+		;
+}
+
+void random_screen(){
+	initial_clear();
+	wait_for_vsync(); // swap front and back buffers on VGA vertical sync
+    pixel_buffer_start = *(pixel_ctrl_ptr + 1); // new back buffer	
+	initial_clear();
+	wait_for_vsync(); // swap front and back buffers on VGA vertical sync
+    pixel_buffer_start = *(pixel_ctrl_ptr + 1); // new back buffer	
+	initial_clear_chars();
 	
+	const int tile_size = 6; 
+	const int board_x0 = 15/tile_size;
+	const int board_y0 = 40/tile_size;
+	const int board_x1 = (RESOLUTION_X-15)/tile_size;
+	const int board_y1 = (RESOLUTION_Y-25)/tile_size;
+	isPaused = true;
+	
+	// Title and instructions
+	char* str = "Game of Life Random Generator\0";
+	draw_text((80-strlen(str))/2, 1,str);
+	str = "Enjoy a simulation of Life with randomly generated tiles.\0";
+	draw_text(4, 4, str);
+	str = "Press pushbutton 0 to start simulation.\0";
+	draw_text(4, 6, str);
+	str = "Back to Main Menu<<\0"; // clicky stuff?
+	draw_text(2, 57, str);
+	char* credits = "Stephen and Yvonne, 2021\0";
+	draw_text(55,58,credits);
+
+	random_initialization(board_x0, board_x1, board_y0, board_y1, 0.9);
+	
+	// simulation loop
+	int total_iterations = 0;
+    while (1)
+    {
+		if (screen != RANDOM) break;
+		if (total_iterations > 0 && isPaused) // display the initial config
+			continue;
+		
+        // start clearing previously drawn pixels
+		deleteList(front_list);
+        front_list->head = pixel_list->head;//back_list->head;
+        //back_list->head = pixel_list->head;
+        clear_screen(front_list,tile_size);
+        pixel_list = init();
+        front_list = init();
+        // finish clearing previously drawn pixels
+		
+        // draw, then update the game board
+        update_board_state(board_x0,board_x1,board_y0,board_y1, tile_size);
+
+        wait_for_vsync(); // swap front and back buffers on VGA vertical sync
+        pixel_buffer_start = *(pixel_ctrl_ptr + 1); // new back buffer
+		
+		total_iterations++;
+    }
+	if (screen == USER_DRAWING)
+		user_drawing();
+	else if (screen == PRESETS)
+		presets();
+	else
+		;
+
+
+}
+
+void user_drawing(){
+	initial_clear();
+	wait_for_vsync(); // swap front and back buffers on VGA vertical sync
+    pixel_buffer_start = *(pixel_ctrl_ptr + 1); // new back buffer	
+	initial_clear();
+	wait_for_vsync(); // swap front and back buffers on VGA vertical sync
+    pixel_buffer_start = *(pixel_ctrl_ptr + 1); // new back buffer	
+	initial_clear_chars();
+	
+	const int tile_size = 5; // 5x5
+	const int board_x = RESOLUTION_X/tile_size;
+	const int board_y = RESOLUTION_Y/tile_size;
+	isPaused = false;
+	
+	// Title and instructions
+	char* str = "Game of Life - Draw your own\0";
+	draw_text((80-strlen(str))/2, 1,str);
+	str = "Drag the mouse on the screen to draw an initial configuration.\0";
+	draw_text(4, 4, str);
+	str = "Press pushbutton 0 to start simulation.\0";
+	draw_text(4, 6, str);
+	str = "Back to Main Menu<<\0"; // clicky stuff?
+	draw_text(2, 57, str);
+	char* credits = "Stephen and Yvonne, 2021\0";
+	draw_text(55,58,credits);
+	
+	// simulation loop
+	int total_iterations = 0;
+    while (1)
+    {
+		if (screen != USER_DRAWING) break;
+		if (total_iterations > 0 && isPaused) // display the initial config
+			continue;
+		
+        // start clearing previously drawn pixels
+		deleteList(front_list);
+        front_list->head = pixel_list->head;//back_list->head;
+        //back_list->head = pixel_list->head;
+        clear_screen(front_list,tile_size);
+        pixel_list = init();
+        front_list = init();
+        // finish clearing previously drawn pixels
+		
+        // draw, then update the game board
+        update_board_state(0,board_x,0,board_y, tile_size);
+
+        wait_for_vsync(); // swap front and back buffers on VGA vertical sync
+        pixel_buffer_start = *(pixel_ctrl_ptr + 1); // new back buffer
+		
+		total_iterations++;
+    }
+	if (screen == RANDOM)
+		random_screen();
+	else if (screen == PRESETS)
+		presets();
+	else
+		;
+
 }
 
 void presets(){
 	initial_clear();
+	wait_for_vsync(); // swap front and back buffers on VGA vertical sync
+    pixel_buffer_start = *(pixel_ctrl_ptr + 1); // new back buffer	
+	initial_clear();
+	wait_for_vsync(); // swap front and back buffers on VGA vertical sync
+    pixel_buffer_start = *(pixel_ctrl_ptr + 1); // new back buffer	
 	initial_clear_chars();
 	
 	const int tile_size = 2; // 2x2
@@ -463,6 +617,7 @@ void presets(){
 	int total_iterations = 0;
     while (1)
     {
+		if (screen != PRESETS) break;
 		if (total_iterations > 0 && isPaused) // display the initial config
 			continue;
 		
@@ -483,6 +638,12 @@ void presets(){
 		
 		total_iterations++;
     }
+	if (screen == RANDOM)
+		random_screen();
+	else if (screen == USER_DRAWING)
+		user_drawing();
+	else
+		;
 }
 /*
 void logic_gates(){
@@ -783,11 +944,10 @@ void draw_board(int x0, int x1, int y0, int y1, int size){
 	}
 }
 
-void random_initialization(float prop){
-
+void random_initialization(int x0, int x1, int y0, int y1, float prop){
   int denom = 1000;
-  for(int i=0;i < RESOLUTION_X;i++){
-      for(int j=0;j < RESOLUTION_Y;j++){
+  for(int i=x0;i < x1;i++){
+      for(int j=y0;j < y1;j++){
           if(rand()%denom>prop*denom){
               game_board[i][j] = ALIVE;
           }
@@ -871,7 +1031,8 @@ void initial_clear(){
     for(int i = 0;i<RESOLUTION_X;i++){
       for(int j =0;j<RESOLUTION_Y;j++){
         // clear screen by drawing everything to color of background
-        draw_pixel(i,j,bg_color);
+        	draw_pixel(i,j,bg_color);
+		  game_board[i][j] = DEAD;
       }
     }
 }
@@ -927,7 +1088,7 @@ void enable_interrupts()
 // configure keys
 void config_KEYs(){
 	volatile int * KEY_ptr = (int *)KEY_BASE; // pushbutton KEY address
-	*(KEY_ptr + 2) = 0x1; // enable interrupts for KEY[0]
+	*(KEY_ptr + 2) = 0xF; // enable interrupts for all KEYs
 }
 
 // interrupt service routine for KEYs
@@ -937,7 +1098,20 @@ void KEY_ISR()
 	int press;
 	press = *(KEY_ptr + 3); // read the pushbutton interrupt register
 	*(KEY_ptr + 3) = press; // Clear the interrupt
-	isPaused ^= 1; // Toggle isPaused value
+	if ((press & 0b1) != 0) // KEY0
+		isPaused ^= 1; // Toggle isPaused value
+	else if ((press & 0b10) != 0) // KEY1
+		screen = RANDOM;
+	else if ((press & 0b100) != 0) // KEY2
+		screen = USER_DRAWING;
+	else if ((press & 0b1000) != 0) // KEY3
+		screen = PRESETS;
+	else // unexpected input
+	{
+		while(1)
+			;
+	}
+
 	return;
 }
 
