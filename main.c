@@ -70,11 +70,12 @@
 #define		SYS_MODE				0b11111
 
 #define 	KEYS_IRQ				73
+#define   PS2_IRQ         79
 
 #define		INT_ENABLE				0b01000000
 #define		INT_DISABLE				0b11000000
 #define		ENABLE					0x1
-	
+
 /* default VGA colors */
 #define WHITE 0xFFFF
 #define YELLOW 0xFFE0
@@ -93,7 +94,10 @@
 #define RESOLUTION_Y 240
 #define CHAR_MAX_X 80
 #define CHAR_MAX_Y 60
-	
+
+/* Mouse Input Settings */
+#define ACCELERATION 1
+
 /* Tile Active */
 #define DEAD  0
 #define ALIVE 1
@@ -227,9 +231,15 @@ short int tile_color;
 // game states
 bool isPaused;
 
+
+// mouse position and size variables
+int mouse_x,mouse_y;
+int mouse_width,mouse_height;
+
 // screen
 volatile int screen;
 enum Screens{MAIN_MENU, RANDOM, USER_DRAWING, PRESETS};
+
 
 /* GLOBAL VARIABLES END */
 
@@ -247,6 +257,7 @@ void presets();
 void initialize_board();
 
 // draw the game board (a rectangle in the screen)
+
 void draw_board(int x0, int x1, int y0, int y1, int size);
 	
 // initialize the board randomly with prop % chance that a cell is alive at the start
@@ -288,6 +299,18 @@ void config_KEYs();
 // interrupt service routine for KEYs
 void KEY_ISR();
 
+// configure mouse input (PS2 port)
+void config_ps2();
+
+// interrupt service routine for mouse input (PS2 port)
+void MOUSE_ISR();
+
+// interrupt mouse coordinates
+void initialize_mouse_coords();
+
+// update mouse coords and keep mouse position within screen bounds
+void update_mouse_coords(int disp_x,int disp_y);
+
 //void SW_ISR();
 	
 // enable interrupts after setting up devices
@@ -306,6 +329,9 @@ void draw_rect(int x,int y,int width, int height,short int color);
 
 // draw a string of text on character buffer
 void draw_text(int x, int y, char * text_ptr);
+
+// draw the cursor on the screen
+void draw_cursor(short int color);
 
 // wait for vertical synchronization
 void wait_for_vsync();
@@ -335,16 +361,18 @@ int main(void)
 
     pixel_list = init();
     front_list = init();
-	
+
 	//srand(time(NULL));
-    
+
 	set_up_IRQ();
 	config_GIC();
 	config_KEYs();
+  config_ps2();
+  initialize_mouse_coords();
 	enable_interrupts();
-	
+
 	initial_clear_chars();
-	
+
 	/* Set up and clear both front and back buffers */
     // set front pixel buffer to start of FPGA On-chip memory
     *(pixel_ctrl_ptr + 1) = 0xC8000000; // first store the address in the
@@ -356,12 +384,13 @@ int main(void)
     initial_clear();
 
      // pixel_buffer_start points to the pixel buffer
-    // set back pixel buffer to start of SDRAM memory 
+    // set back pixel buffer to start of SDRAM memory
     *(pixel_ctrl_ptr + 1) = 0xC0000000;
     pixel_buffer_start = *(pixel_ctrl_ptr + 1); // we draw on the back buffer
     initial_clear();
 	
 	screen = MAIN_MENU;
+
 	main_menu();
 }
 
@@ -545,6 +574,8 @@ void user_drawing(){
 		
         // draw, then update the game board
         update_board_state(0,board_x,0,board_y, tile_size);
+      
+        draw_cursor(GREEN);
 
         wait_for_vsync(); // swap front and back buffers on VGA vertical sync
         pixel_buffer_start = *(pixel_ctrl_ptr + 1); // new back buffer
@@ -587,6 +618,7 @@ void presets(){
 	draw_text(55,58,credits);
 
     // 1. Still Life
+
 	str = "1. Still Life\0";
 	draw_text(4, 10, str);
 	block(49, 25);
@@ -596,6 +628,7 @@ void presets(){
 	// 2. Oscillators
 	str = "2. Oscillators\0";
 	draw_text(4, 20, str);
+
 	blinker(50, 50);
 	toad(60, 49);
 	pulsar(80, 50);
@@ -607,12 +640,23 @@ void presets(){
 	glider_gun(80, 70, true);
 	
 	/*
+
 	// 4. Logic gates
 	str = "4. Logic gates and other cool stuff\0";
 	draw_text(4, 50, str);
+
+	draw_ECE243(200, 200);
+
+	/* // scratch this, this is kinda stupid
+	draw_board(0,RESOLUTION_X,0,RESOLUTION_Y);
+    wait_for_vsync(); // swap front and back buffers on VGA vertical sync
+    pixel_buffer_start = *(pixel_ctrl_ptr + 1); // new back buffer
+	draw_board(0,RESOLUTION_X,0,RESOLUTION_Y);
+    wait_for_vsync(); // swap front and back buffers on VGA vertical sync
+    pixel_buffer_start = *(pixel_ctrl_ptr + 1); // new back buffer
 	draw_ECE243(100, 100);
 	*/
-	
+
 	// simulation loop
 	int total_iterations = 0;
     while (1)
@@ -620,22 +664,25 @@ void presets(){
 		if (screen != PRESETS) break;
 		if (total_iterations > 0 && isPaused) // display the initial config
 			continue;
-		
+
         // start clearing previously drawn pixels
-		deleteList(front_list);
+		    deleteList(front_list);
         front_list->head = pixel_list->head;//back_list->head;
         //back_list->head = pixel_list->head;
         clear_screen(front_list,tile_size);
         pixel_list = init();
         front_list = init();
         // finish clearing previously drawn pixels
-		
+
         // draw, then update the game board
+        //update_board_state(0,RESOLUTION_X,0,RESOLUTION_Y);
+      
         update_board_state(0,board_x,0,board_y, tile_size);
+
 
         wait_for_vsync(); // swap front and back buffers on VGA vertical sync
         pixel_buffer_start = *(pixel_ctrl_ptr + 1); // new back buffer
-		
+
 		total_iterations++;
     }
 	if (screen == RANDOM)
@@ -724,7 +771,7 @@ void update_board_state(int x0, int x1, int y0, int y1, int size){
 				new_board[i][j] = DEAD;
 			}
         }
-		  
+
 		if (prev_board[i][j]==ALIVE && new_board[i][j]==DEAD)
 			insertFront(pixel_list, i, j);
 		prev_board[i][j] = game_board[i][j];
@@ -805,6 +852,7 @@ void glider (int left_x, int top_y){
 
 // 12x12
 void pulsar(int centre_x, int centre_y){
+
 	for (int d = 2; d <=4; d++)
 	{
 		game_board[centre_x+d][centre_y+6] = ALIVE;
@@ -815,7 +863,7 @@ void pulsar(int centre_x, int centre_y){
 		game_board[centre_x-d][centre_y+1] = ALIVE;
 		game_board[centre_x-d][centre_y-6] = ALIVE;
 		game_board[centre_x-d][centre_y-1] = ALIVE;
-		
+
 		game_board[centre_x+6][centre_y+d] = ALIVE;
 		game_board[centre_x+1][centre_y+d] = ALIVE;
 		game_board[centre_x-6][centre_y+d] = ALIVE;
@@ -955,6 +1003,18 @@ void random_initialization(int x0, int x1, int y0, int y1, float prop){
   }
 }
 
+initialize_mouse_coords(){
+    // place mouse cursor in the middle of the screen
+    mouse_x = RESOLUTION_X/2;
+    mouse_y = RESOLUTION_Y/2;
+    mouse_width = 2;
+    mouse_height = 2;
+}
+
+void update_mouse_coords(int disp_x,int disp_y){
+    
+}
+
 
 void draw_tile(int x, int y, int size, short int line_color){
 	for (int i = x; i < x+size; i++){
@@ -1013,6 +1073,11 @@ void draw_text(int x, int y, char * text_ptr) {
 		++text_ptr;
 		++offset;
 	}
+}
+
+void draw_cursor(short int color){
+  draw_rect(mouse_x,mouse_y,mouse_width,mouse_height,color);
+
 }
 
 void wait_for_vsync(){
@@ -1115,6 +1180,71 @@ void KEY_ISR()
 	return;
 }
 
+void config_ps2(){
+  volatile int * PS2_ptr = (int *)PS2_BASE;
+  // PS/2 mouse needs to be reset (must be already plugged in)
+  *(PS2_ptr) = 0xFF; // reset
+
+  //enable interrupts
+  *(PS2_ptr+1) = *(PS2_ptr+1)|1;
+
+  int PS2_data = *(PS2_ptr);
+  int RAVAIL = PS2_data & 0xFFFF0000;
+
+  // clear FIFO
+  while(RAVAIL>0){
+    PS2_data = *(PS2_ptr);
+    RAVAIL = PS2_data & 0xFFFF0000;
+  }
+}
+
+void MOUSE_ISR(){
+  volatile int * PS2_ptr = (int *)PS2_BASE;
+  int PS2_data, RVALID, RAVAIL;
+  char byte1 = 0, byte2 = 0, byte3 = 0;
+
+  PS2_data = *(PS2_ptr); // read the Data register in the PS/2 port
+  RVALID = PS2_data & 0x8000; // extract the RVALID field
+  RAVAIL = PS2_data & 0xFFFF0000;
+
+  while(RVALID || RAVAIL>0) {
+
+
+    byte1 = byte2;
+    byte2 = byte3;
+    byte3 = PS2_data & 0xFF;
+
+    // check if LMB or RMB has been clicked
+    if(byte1 & 1){
+      printf("LMB clicked");
+    }else if(byte1 & 2){
+      printf("RMB clicked");
+    }
+
+    // finished receiving 3 byte data from mouse
+    if(byte1!=0){
+        signed int x_movement = byte2*(((byte1&16)>0)?1:-1);
+        signed int y_movement = byte3*(((byte1&32)>0)?1:-1);
+        update_mouse_coords(x_movement,y_movement);
+        printf("movement :D %d %d\n",x_movement,y_movement);
+    }
+
+    printf("%d %d %d",byte1,byte2,byte3);
+
+    printf("ravail: %d\n",RAVAIL);
+    //HEX_PS2(byte1, byte2, byte3);
+    /*
+    if ((byte2 == (char)0xAA) && (byte3 == (char)0x00))
+    // mouse inserted; initialize sending of data
+      *(PS2_ptr) = 0xF4;
+    */
+    PS2_data = *(PS2_ptr); // read the Data register in the PS/2 port
+    RVALID = PS2_data & 0x8000; // extract the RVALID field
+    RAVAIL = PS2_data & 0xFFFF0000;
+  }
+}
+
+
 // configure the GIC
 void config_GIC(void)
 {
@@ -1123,8 +1253,14 @@ void config_GIC(void)
 	*((int *)0xFFFED8C4) = 0x01000000;
 	*((int *)0xFFFED118) = 0x00000080;*/
 	/* configure the FPGA interval timer and KEYs interrupts */
+
+  // setup ICDISERn so interrupts are enabled for all peripherals
+	*((int *)0xFFFED108) = 0x00008300;
+
+  // setup ICDIPTRn so interrupts target processor 1
 	*((int *)0xFFFED848) = 0x00000101;
-	*((int *)0xFFFED108) = 0x00000300;
+  *((int *)0xFFFED84C) = 0x01000000;
+
 	// Set Interrupt Priority Mask Register (ICCPMR). Enable interrupts of all
 	// priorities
 	address = MPCORE_GIC_CPUIF + ICCPMR;
@@ -1145,10 +1281,13 @@ void __attribute__((interrupt)) __cs3_isr_irq(void)
 	// Read the ICCIAR from the processor interface
 	int address = MPCORE_GIC_CPUIF + ICCIAR;
 	int int_ID = *((int *)address);
-	switch (int_ID){ 
+	switch (int_ID){
 		case KEYS_IRQ: // check if interrupt is from the KEYs
 			KEY_ISR();
 			break;
+    case PS2_IRQ:
+      MOUSE_ISR();
+      break;
 		default:
 			while (1)
 			; // if unexpected, then stay here
