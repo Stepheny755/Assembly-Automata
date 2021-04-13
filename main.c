@@ -225,6 +225,7 @@ LinkedList* back_list;
 // game board
 bool game_board[RESOLUTION_X][RESOLUTION_Y];
 bool prev_board[RESOLUTION_X][RESOLUTION_Y];
+int color_board[RESOLUTION_X][RESOLUTION_Y];
 
 // global colour values
 short int bg_color;
@@ -233,6 +234,8 @@ short int tile_color;
 // game states
 bool isPaused;
 
+// linked tile size
+int l_tile_size;
 
 // mouse position and size variables
 int mouse_x,mouse_y;
@@ -314,6 +317,9 @@ void initialize_mouse_coords();
 
 // parse left mouse button clicked procedures
 void parse_lmb_click();
+
+// parse right mouse button clicked procedures
+void parse_rmb_click();
 
 // check if mouse is in bounds (x1<x2,y1<y2)
 bool mouse_bounds(int x1,int y1,int x2,int y2);
@@ -548,7 +554,9 @@ void user_drawing(){
 	const int tile_size = 5; // 5x5
 	const int board_x = RESOLUTION_X/tile_size;
 	const int board_y = RESOLUTION_Y/tile_size;
-	isPaused = false;
+	isPaused = true;
+
+  l_tile_size = tile_size;
 
 	// Title and instructions
 	char* str = "Game of Life - Draw your own\0";
@@ -567,15 +575,17 @@ void user_drawing(){
     while (1)
     {
 		if (screen != USER_DRAWING) break;
-		if (total_iterations > 0 && isPaused) // display the initial config
-			continue;
 
         // start clearing previously drawn pixels
 		    clear(tile_size);
         // finish clearing previously drawn pixels
 
         // draw, then update the game board
-        update_board_state(0,board_x,0,board_y, tile_size);
+        if(!isPaused){
+            update_board_state(0,board_x,0,board_y,tile_size);
+        }else{
+            draw_board(0,board_x,0,board_y,tile_size);
+        }
 
         draw_cursor();
 
@@ -584,6 +594,10 @@ void user_drawing(){
 
 		total_iterations++;
     }
+
+  // reset linked tile size
+  l_tile_size = 0;
+
 	if (screen == RANDOM)
 		random_screen();
 	else if (screen == PRESETS)
@@ -753,12 +767,14 @@ void update_board_state(int x0, int x1, int y0, int y1, int size){
         //printf("%d %d:%d\n",i,j,total);
 
         if(game_board[i][j]==ALIVE){
-            draw_tile(i*size,j*size,size,tile_color);
+            color_board[i][j] = rand()%65535;
+            draw_tile(i*size,j*size,size,color_board[i][j]);
             insertFront(pixel_list,i,j,true);
 
             // cell dies if it has insufficient or too many neighbours
             if(total < 2 || total > 3){
                 new_board[i][j] = DEAD;
+                color_board[i][j] = 0;
             }
 			else{
 				new_board[i][j] = ALIVE;
@@ -770,6 +786,7 @@ void update_board_state(int x0, int x1, int y0, int y1, int size){
             }
 			else{
 				new_board[i][j] = DEAD;
+        color_board[i][j] = 0;
 			}
         }
 
@@ -989,6 +1006,7 @@ void draw_board(int x0, int x1, int y0, int y1, int size){
 		for(int j=y0;j<y1;j++){
 			if (game_board[i][j]==ALIVE)
 				draw_tile(i*size,j*size,size,tile_color);
+        insertFront(pixel_list,i,j,true);
 		}
 	}
 }
@@ -1045,13 +1063,20 @@ void update_mouse_coords(int disp_x,int disp_y){
 
 void parse_lmb_click(){
 
-    printf("mouse loc: %d %d\n",mouse_x,mouse_y);
+    //printf("mouse loc: %d %d\n",mouse_x,mouse_y);
 
     // check for return to main menu
     if(screen != MAIN_MENU && mouse_bounds(7,227,82,232)){
         initialize_mouse_coords();
         screen = MAIN_MENU;
     }
+}
+
+void parse_rmb_click(){
+    if(screen == USER_DRAWING && l_tile_size != 0){
+        game_board[mouse_x/l_tile_size][mouse_y/l_tile_size] = ALIVE;
+    }
+
 }
 
 void draw_tile(int x, int y, int size, short int line_color){
@@ -1268,6 +1293,7 @@ void MOUSE_ISR(){
           parse_lmb_click();
         }else if(byte1 & 2){
           printf("RMB clicked\n");
+          parse_rmb_click();
         }
 
         int x_sign = ((byte1&16)>0);
@@ -1279,9 +1305,9 @@ void MOUSE_ISR(){
         //printf("sign bits are: %d %d\n",((byte1&16)>0),((byte1&32)>0));
         //printf("data is %d %d\n",byte2,byte3);
         //printf("test values: %d %d",)
-        printf("movement : %d %d\n",x_movement,y_movement);
+        //printf("movement : %d %d\n",x_movement,y_movement);
     }
-    printf("bytes: %d %d %d\n",byte1,byte2,byte3);
+    //printf("bytes: %d %d %d\n",byte1,byte2,byte3);
 
     PS2_data = *(PS2_ptr); // read the Data register in the PS/2 port
     RVALID = PS2_data & 0x8000; // extract the RVALID field
