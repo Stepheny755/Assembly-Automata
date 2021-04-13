@@ -238,6 +238,8 @@ bool isPaused;
 int mouse_x,mouse_y;
 int mouse_width,mouse_height;
 
+short int cursor_color;
+
 // screen
 volatile int screen;
 enum Screens{MAIN_MENU, RANDOM, USER_DRAWING, PRESETS};
@@ -310,6 +312,8 @@ void MOUSE_ISR();
 // interrupt mouse coordinates
 void initialize_mouse_coords();
 
+void parse_lmb_click();
+
 // update mouse coords and keep mouse position within screen bounds
 void update_mouse_coords(int disp_x,int disp_y);
 
@@ -329,7 +333,7 @@ void draw_tile_clear(int x,int y,int size,short int line_color);
 void draw_text(int x, int y, char * text_ptr);
 
 // draw the cursor on the screen
-void draw_cursor(short int color);
+void draw_cursor();
 
 // wait for vertical synchronization
 void wait_for_vsync();
@@ -358,6 +362,7 @@ int main(void)
     /* Initialize variables */
     bg_color = BLACK;
     tile_color = WHITE;
+    cursor_color = GREEN;
     isPaused = true;
 
     pixel_list = init();
@@ -562,7 +567,7 @@ void user_drawing(){
         // draw, then update the game board
         update_board_state(0,board_x,0,board_y, tile_size);
 
-        draw_cursor(GREEN);
+        draw_cursor();
 
         wait_for_vsync(); // swap front and back buffers on VGA vertical sync
         pixel_buffer_start = *(pixel_ctrl_ptr + 1); // new back buffer
@@ -1065,13 +1070,17 @@ void draw_text(int x, int y, char * text_ptr) {
 	}
 }
 
-void draw_cursor(short int color){
-  for(int i = -mouse_width;i<mouse_width;i++){
-     for(int j = -mouse_height;j<mouse_height;j++){
-        draw_pixel(mouse_x+i,mouse_y+j,color);
-        insertFront(pixel_list,mouse_x+i,mouse_y+j,false);
-     }
-  }
+void draw_cursor(){
+  draw_pixel(mouse_x-1,mouse_y-1,cursor_color);
+  insertFront(pixel_list,mouse_x-1,mouse_y-1,false);
+  draw_pixel(mouse_x+1,mouse_y-1,cursor_color);
+  insertFront(pixel_list,mouse_x+1,mouse_y-1,false);
+  draw_pixel(mouse_x,mouse_y,cursor_color);
+  insertFront(pixel_list,mouse_x,mouse_y,false);
+  draw_pixel(mouse_x-1,mouse_y+1,cursor_color);
+  insertFront(pixel_list,mouse_x-1,mouse_y+1,false);
+  draw_pixel(mouse_x+1,mouse_y+1,cursor_color);
+  insertFront(pixel_list,mouse_x+1,mouse_y+1,false);
 }
 
 void wait_for_vsync(){
@@ -1244,6 +1253,7 @@ void MOUSE_ISR(){
         //printf("test values: %d %d",)
         //printf("movement : %d %d\n",x_movement,y_movement);
     }
+    printf("bytes: %d %d %d\n",byte1,byte2,byte3);
 
     PS2_data = *(PS2_ptr); // read the Data register in the PS/2 port
     RVALID = PS2_data & 0x8000; // extract the RVALID field
