@@ -312,7 +312,11 @@ void MOUSE_ISR();
 // interrupt mouse coordinates
 void initialize_mouse_coords();
 
+// parse left mouse button clicked procedures
 void parse_lmb_click();
+
+// check if mouse is in bounds (x1<x2,y1<y2)
+bool mouse_bounds(int x1,int y1,int x2,int y2);
 
 // update mouse coords and keep mouse position within screen bounds
 void update_mouse_coords(int disp_x,int disp_y);
@@ -448,6 +452,8 @@ void main_menu(){
     		clear(tile_size);
         // finish clearing previously drawn pixels
 
+        draw_cursor();
+
         // draw, then update the game board
         update_board_state(0,board_x,0,board_y, tile_size);
 
@@ -511,6 +517,8 @@ void random_screen(){
         // draw, then update the game board
         update_board_state(board_x0,board_x1,board_y0,board_y1, tile_size);
 
+        draw_cursor();
+
         wait_for_vsync(); // swap front and back buffers on VGA vertical sync
         pixel_buffer_start = *(pixel_ctrl_ptr + 1); // new back buffer
 
@@ -520,6 +528,8 @@ void random_screen(){
 		user_drawing();
 	else if (screen == PRESETS)
 		presets();
+  else if (screen == MAIN_MENU)
+    main_menu();
 	else
 		;
 
@@ -578,6 +588,8 @@ void user_drawing(){
 		random_screen();
 	else if (screen == PRESETS)
 		presets();
+  else if (screen == MAIN_MENU)
+    main_menu();
 	else
 		;
 
@@ -675,6 +687,8 @@ void presets(){
 		random_screen();
 	else if (screen == USER_DRAWING)
 		user_drawing();
+  else if (screen == MAIN_MENU)
+    main_menu();
 	else
 		;
 }
@@ -1029,6 +1043,16 @@ void update_mouse_coords(int disp_x,int disp_y){
     //printf("old mouse coordinates: %d %d.\nnew mouse coordinates: %d %d",tempx,tempy,mouse_x,mouse_y);
 }
 
+void parse_lmb_click(){
+
+    printf("mouse loc: %d %d\n",mouse_x,mouse_y);
+
+    // check for return to main menu
+    if(screen != MAIN_MENU && mouse_bounds(7,227,82,232)){
+        initialize_mouse_coords();
+        screen = MAIN_MENU;
+    }
+}
 
 void draw_tile(int x, int y, int size, short int line_color){
 	for (int i = x; i < x+size; i++){
@@ -1144,6 +1168,10 @@ bool check_bounds(int x,int y,int size){
     return (x<RESOLUTION_X/size&&x>=0)&&(y<RESOLUTION_Y/size&&y>=0);
 }
 
+bool mouse_bounds(int x1,int y1,int x2,int y2){
+    return (mouse_x<=x2&&mouse_x>=x1)&&(mouse_y<=y2&&mouse_y>=y1);
+}
+
 // set up IRQ stack pointer
 void set_up_IRQ(){
 	int stack, mode;
@@ -1237,7 +1265,7 @@ void MOUSE_ISR(){
         // check if LMB or RMB has been clicked
         if(byte1 & 1){
           printf("LMB clicked\n");
-
+          parse_lmb_click();
         }else if(byte1 & 2){
           printf("RMB clicked\n");
         }
@@ -1251,7 +1279,7 @@ void MOUSE_ISR(){
         //printf("sign bits are: %d %d\n",((byte1&16)>0),((byte1&32)>0));
         //printf("data is %d %d\n",byte2,byte3);
         //printf("test values: %d %d",)
-        //printf("movement : %d %d\n",x_movement,y_movement);
+        printf("movement : %d %d\n",x_movement,y_movement);
     }
     printf("bytes: %d %d %d\n",byte1,byte2,byte3);
 
